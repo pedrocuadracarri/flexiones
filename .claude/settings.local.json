@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python --version)",
+      "PowerShell(gh --version)",
+      "PowerShell(gh auth status)",
+      "PowerShell(git config --global user.name)",
+      "PowerShell(git config --global user.email)",
+      "PowerShell(git config --global credential.helper)",
+      "PowerShell(git init -b main)",
+      "PowerShell(git config user.name \"Pedro\")",
+      "PowerShell(git config user.email \"pedrocuadracarri@gmail.com\")",
+      "PowerShell(git add -A)"
+    ]
+  }
+}

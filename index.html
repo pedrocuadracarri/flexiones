@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1116">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Contador de Flexiones</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+  <div class="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="hud">
+      <div class="counter"><span id="reps">0</span><small>reps</small></div>
+      <div class="chips">
+        <span class="chip">Codo <b id="elbowVal">–</b>°</span>
+        <span class="chip">Cuerpo <b id="bodyVal">–</b>°</span>
+        <span class="chip" id="phase">arriba</span>
+      </div>
+    </div>
+
+    <button id="switchBtn" class="icon" title="Cambiar cámara" hidden>⟳</button>
+    <div id="status" class="status">Pulsa Iniciar y coloca el móvil <b>de lado</b>, apoyado en el suelo.</div>
+  </div>
+
+  <ul id="feedback" class="feedback"></ul>
+
+  <div class="controls">
+    <button id="startBtn">Iniciar</button>
+    <button id="stopBtn" disabled>Terminar</button>
+    <label class="chk"><input type="checkbox" id="voice" checked> Voz</label>
+  </div>
+
+  <details class="history">
+    <summary>Historial</summary>
+    <table id="historyTable">
+      <thead><tr><th>Fecha</th><th>Reps</th><th>Calidad</th><th>Tiempo</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button id="clearHistory" class="link">Borrar historial</button>
+  </details>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
