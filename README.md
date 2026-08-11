@@ -5,9 +5,14 @@ App web que cuenta flexiones con la cámara y evalúa la técnica en tiempo real
 
 ## Qué mide
 
-- **Repeticiones**: ángulo hombro–codo–muñeca, con máquina de estados (baja <100°, sube >155°).
+- **Encuadre**: antes de contar comprueba que se ven hombro, codo, cadera y rodilla,
+  que estás de lado (no de frente) y en posición de plancha.
+- **Calibración de 3 s**: mide tu extensión real de codo y tu línea neutra de cadera,
+  y ajusta los umbrales a tu cuerpo (botón *Recalibrar* si cambias de sitio).
+- **Repeticiones**: ángulo hombro–codo–muñeca con máquina de estados sobre esos umbrales.
 - **Profundidad**: codo a 90° o menos por repetición.
-- **Alineación**: ángulo hombro–cadera–rodilla; detecta cadera caída o elevada.
+- **Alineación**: ángulo hombro–cadera–rodilla respecto a tu neutro; detecta cadera
+  caída o elevada y avisa por voz durante la bajada, no al terminar.
 - **Tempo**: avisa si la repetición es demasiado rápida o demasiado lenta.
 - **Historial**: sesiones guardadas en el navegador (localStorage).
 

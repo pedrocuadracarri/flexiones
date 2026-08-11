@@ -7,10 +7,21 @@ const CONNECTIONS = [
   [11, 23], [12, 24], [23, 24], [23, 25], [24, 26], [25, 27], [26, 28],
 ];
 
-const DOWN_ANGLE = 100;   // entra en fase de bajada
-const UP_ANGLE = 155;     // brazos extendidos
 const GOOD_DEPTH = 90;    // codo a 90° o menos = profundidad correcta
 const MIN_VISIBILITY = 0.6;
+const CAL_SECONDS = 3;
+
+// Umbrales personales, medidos en la calibración (valores por defecto de reserva)
+const cal = {
+  upElbow: 170,      // extensión real de tu codo arriba
+  neutralBody: 180,  // tu línea hombro-cadera-rodilla neutra
+  downAngle: 100,    // entra en fase de bajada
+  upAngle: 155,      // vuelve a arriba
+  samples: [],
+  startedAt: 0,
+};
+
+let stage = "framing"; // framing → calibrating → counting
 
 const el = {
   video: document.getElementById("video"),
@@ -24,6 +35,7 @@ const el = {
   startBtn: document.getElementById("startBtn"),
   stopBtn: document.getElementById("stopBtn"),
   switchBtn: document.getElementById("switchBtn"),
+  recalBtn: document.getElementById("recalBtn"),
   voice: document.getElementById("voice"),
   historyBody: document.querySelector("#historyTable tbody"),
   clearHistory: document.getElementById("clearHistory"),
@@ -49,9 +61,11 @@ const rep = {
   sagSign: 0,
   startedAt: 0,
   descending: false,
+  cued: false,
 };
 
 let smoothElbow = 180;
+let framedSince = 0;
 
 // --- geometría ---------------------------------------------------------
 
@@ -74,16 +88,85 @@ function pickSide(lm) {
   return score(L) >= score(R) ? L : R;
 }
 
-// Desviación de la línea hombro-cadera-rodilla respecto a 180°.
+function median(arr) {
+  const s = [...arr].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+
+// Desviación de la línea hombro-cadera-rodilla respecto a TU línea neutra calibrada.
 // Signo: +1 cadera caída (por debajo de la línea), -1 cadera elevada.
 function bodyLine(lm, side) {
   if (!visible(lm, side.shoulder, side.hip, side.knee)) return null;
   const sh = lm[side.shoulder], hp = lm[side.hip], kn = lm[side.knee];
-  const dev = 180 - angle(sh, hp, kn);
+  const raw = angle(sh, hp, kn);
+  const dev = Math.max(0, cal.neutralBody - raw);
   // y crece hacia abajo: cross > 0 => cadera por debajo de la línea hombro-rodilla
   const cross = (kn.x - sh.x) * (hp.y - sh.y) - (kn.y - sh.y) * (hp.x - sh.x);
   const sign = (cross * Math.sign(kn.x - sh.x || 1)) > 0 ? 1 : -1;
-  return { dev, sign };
+  return { raw, dev, sign };
+}
+
+// --- encuadre y calibración -------------------------------------------
+
+// Devuelve null si la posición es válida, o el motivo por el que no lo es.
+function framingProblem(lm, side) {
+  if (!visible(lm, side.shoulder, side.elbow, side.wrist))
+    return "Aleja la cámara: no veo bien el brazo.";
+  if (!visible(lm, side.hip, side.knee))
+    return "Tienen que verse también cadera y rodilla.";
+
+  const spread = Math.abs(lm[L.shoulder].x - lm[R.shoulder].x);
+  const torso = Math.hypot(lm[side.shoulder].x - lm[side.hip].x, lm[side.shoulder].y - lm[side.hip].y);
+  if (torso > 0 && spread / torso > 0.55)
+    return "Ponte de lado a la cámara, no de frente.";
+
+  const tilt = Math.abs(Math.atan2(
+    lm[side.shoulder].y - lm[side.knee].y,
+    lm[side.shoulder].x - lm[side.knee].x
+  ) * 180 / Math.PI);
+  if (Math.min(tilt, 180 - tilt) > 40)
+    return "Ponte en posición de plancha, con el cuerpo horizontal.";
+
+  return null;
+}
+
+function startCalibration() {
+  stage = "calibrating";
+  cal.samples = [];
+  cal.startedAt = performance.now();
+  speak("Quieto, calibrando");
+}
+
+function runCalibration(lm, side, elbow, body) {
+  const left = CAL_SECONDS - (performance.now() - cal.startedAt) / 1000;
+  if (framingProblem(lm, side)) {           // te has movido: vuelta a empezar
+    stage = "framing";
+    return;
+  }
+  if (elbow > 130 && body) cal.samples.push([elbow, body.raw]);
+  if (left > 0) {
+    setStatus(`Calibrando… ${left.toFixed(1)} s. Quieto en posición alta.`);
+    el.phase.textContent = "calibrando";
+    return;
+  }
+  if (cal.samples.length < 15) {            // pocas muestras válidas
+    cal.startedAt = performance.now();
+    cal.samples = [];
+    setStatus("Estira los brazos del todo y repetimos la calibración.");
+    return;
+  }
+
+  cal.upElbow = median(cal.samples.map(s => s[0]));
+  cal.neutralBody = median(cal.samples.map(s => s[1]));
+  cal.upAngle = cal.upElbow - 12;
+  cal.downAngle = Math.min(105, Math.max(85, cal.upElbow - 60));
+
+  stage = "counting";
+  smoothElbow = cal.upElbow;
+  rep.phase = "up";
+  resetRep();
+  showFeedback([["good", `Calibrado: extensión ${Math.round(cal.upElbow)}°, línea neutra ${Math.round(cal.neutralBody)}°. ¡Empieza!`]]);
+  speak("Listo, empieza");
 }
 
 // --- lógica de repeticiones -------------------------------------------
@@ -94,36 +177,65 @@ function resetRep() {
   rep.sagSign = 0;
   rep.startedAt = performance.now();
   rep.descending = false;
+  rep.cued = false;
 }
 
 function processFrame(lm) {
   const side = pickSide(lm);
-  if (!visible(lm, side.shoulder, side.elbow, side.wrist)) {
+  const rawElbow = visible(lm, side.shoulder, side.elbow, side.wrist)
+    ? angle(lm[side.shoulder], lm[side.elbow], lm[side.wrist])
+    : null;
+  const body = bodyLine(lm, side);
+
+  if (rawElbow !== null) {
+    smoothElbow = smoothElbow * 0.6 + rawElbow * 0.4;
+    el.elbowVal.textContent = Math.round(smoothElbow);
+  }
+  if (body) el.bodyVal.textContent = Math.round(body.raw);
+
+  if (stage === "framing") {
+    const problem = framingProblem(lm, side);
+    if (problem) {
+      setStatus(problem);
+      el.phase.textContent = "encuadre";
+      framedSince = 0;
+      return;
+    }
+    if (!framedSince) framedSince = performance.now();
+    setStatus("Posición correcta. Mantente quieto…");
+    if (performance.now() - framedSince > 800) startCalibration();
+    return;
+  }
+
+  if (stage === "calibrating") {
+    runCalibration(lm, side, rawElbow ?? 0, body);
+    return;
+  }
+
+  if (rawElbow === null) {
     setStatus("No se ve bien el brazo. Ajusta la cámara.");
     return;
   }
 
-  const raw = angle(lm[side.shoulder], lm[side.elbow], lm[side.wrist]);
-  smoothElbow = smoothElbow * 0.6 + raw * 0.4;
-
-  const body = bodyLine(lm, side);
   if (body) {
     if (body.dev > rep.worstBodyDev) {
       rep.worstBodyDev = body.dev;
       rep.sagSign = body.sign;
     }
-    el.bodyVal.textContent = Math.round(180 - body.dev);
+    // aviso en el momento, no al terminar la repetición
+    if (body.dev > 18 && !rep.cued && rep.phase === "down") {
+      rep.cued = true;
+      speak(body.sign > 0 ? "Sube la cadera" : "Baja la cadera");
+    }
   }
-
-  el.elbowVal.textContent = Math.round(smoothElbow);
 
   if (smoothElbow < rep.minElbow) rep.minElbow = smoothElbow;
 
-  if (rep.phase === "up" && smoothElbow < DOWN_ANGLE) {
+  if (rep.phase === "up" && smoothElbow < cal.downAngle) {
     rep.phase = "down";
     rep.descending = true;
     el.phase.textContent = "bajando";
-  } else if (rep.phase === "down" && smoothElbow > UP_ANGLE) {
+  } else if (rep.phase === "down" && smoothElbow > cal.upAngle) {
     rep.phase = "up";
     el.phase.textContent = "arriba";
     if (rep.descending) completeRep();
@@ -207,24 +319,24 @@ function speak(text) {
 // --- render ------------------------------------------------------------
 
 function draw(lm) {
-  const w = el.canvas.width, h = el.canvas.height;
-  ctx.drawImage(el.video, 0, 0, w, h);
+  ctx.drawImage(el.video, 0, 0, el.canvas.width, el.canvas.height);
   if (!lm) return;
 
   ctx.lineWidth = 4;
-  ctx.strokeStyle = rep.worstBodyDev > 20 ? "#f87171" : "#4ade80";
+  ctx.strokeStyle = stage !== "counting" ? "#60a5fa"
+    : rep.worstBodyDev > 20 ? "#f87171" : "#4ade80";
   for (const [a, b] of CONNECTIONS) {
     if (!visible(lm, a, b)) continue;
     ctx.beginPath();
-    ctx.moveTo(lm[a].x * w, lm[a].y * h);
-    ctx.lineTo(lm[b].x * w, lm[b].y * h);
+    ctx.moveTo(lm[a].x, lm[a].y);
+    ctx.lineTo(lm[b].x, lm[b].y);
     ctx.stroke();
   }
   ctx.fillStyle = "#fff";
   for (const i of [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
     if ((lm[i]?.visibility ?? 0) < MIN_VISIBILITY) continue;
     ctx.beginPath();
-    ctx.arc(lm[i].x * w, lm[i].y * h, 5, 0, Math.PI * 2);
+    ctx.arc(lm[i].x, lm[i].y, 5, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -236,10 +348,19 @@ function loop() {
     if (ts !== lastTs) {
       lastTs = ts;
       const result = landmarker.detectForVideo(el.video, ts);
-      const lm = result.landmarks?.[0];
+      // a píxeles: en coordenadas normalizadas los ángulos salen deformados
+      // cuando el vídeo no es cuadrado
+      const lm = result.landmarks?.[0]?.map(k => ({
+        x: k.x * el.canvas.width,
+        y: k.y * el.canvas.height,
+        visibility: k.visibility,
+      }));
       draw(lm);
       if (lm) processFrame(lm);
-      else setStatus("No te detecto. Colócate dentro del encuadre.");
+      else {
+        setStatus("No te detecto. Colócate dentro del encuadre.");
+        framedSince = 0;
+      }
     }
   }
   requestAnimationFrame(loop);
@@ -326,10 +447,13 @@ async function start() {
     resetRep();
     rep.phase = "up";
     smoothElbow = 180;
+    stage = "framing";
+    framedSince = 0;
 
     running = true;
     el.stopBtn.disabled = false;
-    setStatus("Listo. Ponte en posición de plancha de lado a la cámara.");
+    el.recalBtn.hidden = false;
+    setStatus("Ponte en posición de plancha, de lado a la cámara.");
     loop();
   } catch (err) {
     setStatus(`Error: ${err.message}`);
@@ -341,6 +465,7 @@ function stop() {
   running = false;
   el.stopBtn.disabled = true;
   el.startBtn.disabled = false;
+  el.recalBtn.hidden = true;
   stream?.getTracks().forEach(t => t.stop());
   stream = null;
   wakeLock?.release?.();
@@ -391,6 +516,11 @@ function renderHistory() {
 el.startBtn.addEventListener("click", start);
 el.stopBtn.addEventListener("click", stop);
 el.switchBtn.addEventListener("click", switchCamera);
+el.recalBtn.addEventListener("click", () => {
+  stage = "framing";
+  framedSince = 0;
+  setStatus("Recalibrando: ponte en posición de plancha.");
+});
 el.clearHistory.addEventListener("click", () => {
   localStorage.removeItem(STORE);
   renderHistory();

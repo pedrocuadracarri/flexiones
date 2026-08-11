@@ -102,7 +102,7 @@ button {
   flex: 1;
   touch-action: manipulation;
 }
-#stopBtn { background: #374151; }
+#stopBtn, button.ghost { background: #374151; }
 button:disabled { opacity: .4; }
 button.link { background: none; color: #8b95a5; padding: 6px 0; font-weight: 400; text-decoration: underline; flex: 0; }
 .chk { font-size: 13px; color: #8b95a5; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
