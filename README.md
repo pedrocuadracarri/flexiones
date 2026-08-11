@@ -14,6 +14,12 @@ App web que cuenta flexiones con la cámara y evalúa la técnica en tiempo real
 - **Alineación**: ángulo hombro–cadera–rodilla respecto a tu neutro; detecta cadera
   caída o elevada y avisa por voz durante la bajada, no al terminar.
 - **Tempo**: avisa si la repetición es demasiado rápida o demasiado lenta.
+- **"Gusano"**: compara cuándo toca fondo la cadera y cuándo el pecho. Si la cadera
+  sube primero, estás subiendo por partes en vez de empujar con los brazos.
+- **Fatiga**: compara las últimas reps con el arranque de la serie y avisa una vez
+  cuando pierdes recorrido o te frenas; el resumen final cuantifica la caída.
+- **Clip de la peor repetición**: graba cada rep del canvas (con el esqueleto dibujado)
+  y guarda la peor puntuada para verla al terminar.
 - **Series y descansos**: fija series, reps por serie y descanso; la serie se cierra
   sola al llegar al objetivo y la cuenta atrás del descanso se avisa por voz
   (o marca *Libre* para contar sin objetivo).

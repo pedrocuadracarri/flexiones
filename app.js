@@ -44,6 +44,9 @@ const el = {
   switchBtn: document.getElementById("switchBtn"),
   recalBtn: document.getElementById("recalBtn"),
   skipBtn: document.getElementById("skipBtn"),
+  clipBox: document.getElementById("clipBox"),
+  clip: document.getElementById("clip"),
+  clipScore: document.getElementById("clipScore"),
   setChip: document.getElementById("setChip"),
   setsInput: document.getElementById("setsInput"),
   targetInput: document.getElementById("targetInput"),
@@ -63,6 +66,7 @@ let lastTs = -1;
 const session = {
   reps: 0,
   scores: [],
+  depths: [],
   issues: {},
   startedAt: 0,
 };
@@ -75,7 +79,16 @@ const rep = {
   startedAt: 0,
   descending: false,
   cued: false,
+  tElbowMin: 0,     // instante en que el pecho toca abajo
+  hipLowY: 0,       // punto más bajo de la cadera (y crece hacia abajo)
+  tHipLow: 0,
+  hipYAtElbowMin: 0,
+  torso: 0,
 };
+
+// Reps de la serie actual, para detectar fatiga
+let setLog = [];
+let fatigueWarned = false;
 
 let smoothElbow = 180;
 let framedSince = 0;
@@ -191,6 +204,11 @@ function resetRep() {
   rep.startedAt = performance.now();
   rep.descending = false;
   rep.cued = false;
+  rep.tElbowMin = 0;
+  rep.hipLowY = 0;
+  rep.tHipLow = 0;
+  rep.hipYAtElbowMin = 0;
+  rep.torso = 0;
 }
 
 function processFrame(lm) {
@@ -230,6 +248,9 @@ function processFrame(lm) {
     return;
   }
 
+  const now = performance.now();
+  const hipY = visible(lm, side.hip) ? lm[side.hip].y : null;
+
   if (body) {
     if (body.dev > rep.worstBodyDev) {
       rep.worstBodyDev = body.dev;
@@ -240,14 +261,26 @@ function processFrame(lm) {
       rep.cued = true;
       speak(body.sign > 0 ? "Sube la cadera" : "Baja la cadera");
     }
+    rep.torso = Math.hypot(lm[side.shoulder].x - lm[side.hip].x, lm[side.shoulder].y - lm[side.hip].y);
   }
 
-  if (smoothElbow < rep.minElbow) rep.minElbow = smoothElbow;
+  // Para detectar el "gusano": si la cadera toca fondo y empieza a subir
+  // antes de que el pecho llegue abajo, estás subiendo por partes.
+  if (hipY !== null && hipY > rep.hipLowY) {
+    rep.hipLowY = hipY;
+    rep.tHipLow = now;
+  }
+  if (smoothElbow < rep.minElbow) {
+    rep.minElbow = smoothElbow;
+    rep.tElbowMin = now;
+    if (hipY !== null) rep.hipYAtElbowMin = hipY;
+  }
 
   if (rep.phase === "up" && smoothElbow < cal.downAngle) {
     rep.phase = "down";
     rep.descending = true;
     el.phase.textContent = "bajando";
+    startClip();
   } else if (rep.phase === "down" && smoothElbow > cal.upAngle) {
     rep.phase = "up";
     el.phase.textContent = "arriba";
@@ -271,7 +304,16 @@ function completeRep() {
     score -= 15;
   }
 
-  if (rep.worstBodyDev > 12) {
+  // "Gusano": la cadera toca fondo y ya va subiendo cuando el pecho llega abajo
+  const hipLead = rep.hipLowY - rep.hipYAtElbowMin;
+  const worm = rep.torso > 0 && rep.tHipLow > 0
+    && rep.tElbowMin - rep.tHipLow > 200
+    && hipLead / rep.torso > 0.05;
+
+  if (worm) {
+    issues.push(["bad", "Subes la cadera antes que el pecho. Empuja con los brazos y sube todo el cuerpo a la vez."]);
+    score -= 25;
+  } else if (rep.worstBodyDev > 12) {
     const sev = rep.worstBodyDev > 20 ? "bad" : "warn";
     issues.push(rep.sagSign > 0
       ? [sev, "Cadera caída: aprieta abdomen y glúteos para mantener la línea."]
@@ -291,11 +333,17 @@ function completeRep() {
   session.reps += 1;
   setReps += 1;
   session.scores.push(score);
+  session.depths.push(rep.minElbow);
+  setLog.push({ depth: rep.minElbow, dur: duration });
   for (const [, msg] of issues) session.issues[msg] = (session.issues[msg] || 0) + 1;
 
+  saveClip(score);
   updateCounter();
-  const spoken = plan.free ? session.reps : setReps;
 
+  const fatigue = checkFatigue();
+  if (fatigue) issues.push(["warn", fatigue]);
+
+  const spoken = plan.free ? session.reps : setReps;
   if (issues.length === 0) {
     showFeedback([["good", `Rep ${session.reps}: técnica correcta (${Math.round(rep.minElbow)}°).`]]);
     speak(String(spoken));
@@ -305,6 +353,80 @@ function completeRep() {
   }
 
   if (!plan.free && setReps >= plan.target) endSet();
+}
+
+// --- fatiga -------------------------------------------------------------
+
+const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+
+// Compara las últimas reps con el arranque de la serie. Se avisa una vez.
+function checkFatigue() {
+  if (fatigueWarned || setLog.length < 5) return null;
+  const base = setLog.slice(0, 3);
+  const last = setLog.slice(-2);
+  const depthDrop = mean(last.map(r => r.depth)) - mean(base.map(r => r.depth));
+  const slowdown = mean(last.map(r => r.dur)) / mean(base.map(r => r.dur));
+
+  if (depthDrop > 8) {
+    fatigueWarned = true;
+    return `Estás perdiendo recorrido (${Math.round(depthDrop)}° menos que al empezar). Quedan pocas buenas.`;
+  }
+  if (slowdown > 1.6) {
+    fatigueWarned = true;
+    return "Te estás frenando bastante: llegas al límite, mantén la técnica.";
+  }
+  return null;
+}
+
+// --- clip de la peor repetición ----------------------------------------
+
+let canvasStream = null;
+let recorder = null;
+let clipChunks = [];
+let worstScore = 101;
+let clipUrl = null;
+
+function clipMime() {
+  return ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"]
+    .find(t => window.MediaRecorder?.isTypeSupported?.(t)) || null;
+}
+
+// Se graba solo la repetición en curso: así el clip guardado es un archivo
+// completo y reproducible, no un trozo suelto de un stream.
+function startClip() {
+  const mime = clipMime();
+  if (!mime || !canvasStream || recorder) return;
+  try {
+    clipChunks = [];
+    recorder = new MediaRecorder(canvasStream, { mimeType: mime, videoBitsPerSecond: 1200000 });
+    recorder.ondataavailable = e => e.data.size && clipChunks.push(e.data);
+    recorder.start();
+  } catch {
+    recorder = null;
+  }
+}
+
+function saveClip(score) {
+  if (!recorder) return;
+  const rec = recorder;
+  recorder = null;
+  rec.onstop = () => {
+    if (score >= worstScore || !clipChunks.length) return;
+    worstScore = score;
+    if (clipUrl) URL.revokeObjectURL(clipUrl);
+    clipUrl = URL.createObjectURL(new Blob(clipChunks, { type: rec.mimeType }));
+    el.clip.src = clipUrl;
+    el.clipScore.textContent = `${score}/100`;
+    el.clipBox.hidden = false;
+  };
+  try { rec.stop(); } catch { /* ya parado */ }
+}
+
+function resetClips() {
+  worstScore = 101;
+  el.clipBox.hidden = true;
+  if (clipUrl) { URL.revokeObjectURL(clipUrl); clipUrl = null; }
+  el.clip.removeAttribute("src");
 }
 
 // --- series y descansos ------------------------------------------------
@@ -344,6 +466,8 @@ function tickRest() {
 function startNextSet() {
   currentSet += 1;
   setReps = 0;
+  setLog = [];
+  fatigueWarned = false;
   restUntil = 0;
   el.skipBtn.hidden = true;
   stage = "counting";
@@ -506,10 +630,15 @@ async function start() {
 
     session.reps = 0;
     session.scores = [];
+    session.depths = [];
     session.issues = {};
     session.startedAt = Date.now();
     currentSet = 1;
     setReps = 0;
+    setLog = [];
+    fatigueWarned = false;
+    resetClips();
+    canvasStream = el.canvas.captureStream?.(30) || null;
     updateCounter();
     setPlanEnabled(false);
     el.feedback.innerHTML = "";
@@ -537,6 +666,9 @@ function stop() {
   el.recalBtn.hidden = true;
   el.skipBtn.hidden = true;
   setPlanEnabled(true);
+  if (recorder) { try { recorder.stop(); } catch { /* ya parado */ } recorder = null; }
+  canvasStream?.getTracks().forEach(t => t.stop());
+  canvasStream = null;
   stream?.getTracks().forEach(t => t.stop());
   stream = null;
   wakeLock?.release?.();
@@ -553,6 +685,11 @@ function stop() {
 
   const series = plan.free ? "" : ` · ${currentSet} de ${plan.sets} series`;
   const summary = [["good", `Sesión: ${session.reps} flexiones${series} · calidad media ${avg}/100 · ${duration}s`]];
+
+  if (session.depths.length >= 6) {
+    const drop = mean(session.depths.slice(-3)) - mean(session.depths.slice(0, 3));
+    if (drop > 6) summary.push(["warn", `Las últimas reps bajaron ${Math.round(drop)}° menos que las primeras: la fatiga te quitó recorrido.`]);
+  }
   for (const [msg, n] of top) summary.push(["warn", `${n} reps: ${msg}`]);
   showFeedback(summary);
   speak(`Sesión terminada. ${session.reps} flexiones. Calidad ${avg} sobre 100.`);

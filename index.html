@@ -30,7 +30,13 @@
     <div id="status" class="status">Pulsa Iniciar y coloca el móvil <b>de lado</b>, apoyado en el suelo.</div>
   </div>
 
+  <div class="panel">
   <ul id="feedback" class="feedback"></ul>
+
+  <div id="clipBox" class="clip" hidden>
+    <span class="clipLabel">Peor repetición <b id="clipScore"></b></span>
+    <video id="clip" playsinline muted loop controls></video>
+  </div>
 
   <div class="plan">
     <label>Series <input type="number" id="setsInput" min="1" max="10" value="3"></label>
@@ -45,6 +51,7 @@
     <button id="stopBtn" disabled>Terminar</button>
     <button id="recalBtn" class="ghost" hidden>Recalibrar</button>
     <label class="chk"><input type="checkbox" id="voice" checked> Voz</label>
+  </div>
   </div>
 
   <details class="history">
