@@ -17,7 +17,11 @@
       "PowerShell($env:Path += \";C:\\\\Program Files\\\\GitHub CLI\"; gh repo create flexiones --public --source=. --remote=origin --push --description \"Contador de flexiones con la camara: cuenta reps y evalua tecnica con MediaPipe Pose\")",
       "PowerShell($env:Path += \";C:\\\\Program Files\\\\GitHub CLI\"; gh api -X POST repos/pedrocuadracarri/flexiones/pages -f \"source[branch]=main\" -f \"source[path]=/\" --jq '.html_url, .status')",
       "PowerShell($env:Path += \";C:\\\\Program Files\\\\GitHub CLI\"; Start-Sleep -Seconds 45; gh api repos/pedrocuadracarri/flexiones/pages --jq '.status'; \\(Invoke-WebRequest -Uri \"https://pedrocuadracarri.github.io/flexiones/\" -UseBasicParsing\\).StatusCode)",
-      "PowerShell(git push -q origin main)"
+      "PowerShell(git push -q origin main)",
+      "PowerShell(python -c \"import PIL; print\\(PIL.__version__\\)\")",
+      "PowerShell(python \"C:\\\\Users\\\\pedro\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-pedro-Desktop-Mis-proyectos-IA-Flexiones\\\\1e66cd41-ebaf-40d5-b71f-018db62e2143\\\\scratchpad\\\\logo.py\")",
+      "PowerShell(python \"C:\\\\Users\\\\pedro\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-pedro-Desktop-Mis-proyectos-IA-Flexiones\\\\1e66cd41-ebaf-40d5-b71f-018db62e2143\\\\scratchpad\\\\logo2.py\")",
+      "PowerShell(Remove-Item \"C:\\\\Users\\\\pedro\\\\Desktop\\\\Mis proyectos IA\\\\Flexiones\\\\icon.svg\" -Confirm:$false; Get-ChildItem \"C:\\\\Users\\\\pedro\\\\Desktop\\\\Mis proyectos IA\\\\Flexiones\" -File | Select-Object Name, @{n='KB';e={[math]::Round\\($_.Length/1KB\\)}} | Format-Table -AutoSize)"
     ]
   }
 }

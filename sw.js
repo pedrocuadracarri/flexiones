@@ -1,6 +1,9 @@
-const SHELL = "flexiones-shell-v1";
+const SHELL = "flexiones-shell-v2";
 const DEPS = "flexiones-deps-v1";
-const ASSETS = ["./", "./index.html", "./app.js", "./styles.css", "./manifest.webmanifest", "./icon.svg"];
+const ASSETS = [
+  "./", "./index.html", "./app.js", "./styles.css", "./manifest.webmanifest",
+  "./logo.png", "./icon-192.png", "./icon-512.png",
+];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

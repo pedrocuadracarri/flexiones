@@ -1,4 +1,6 @@
-# Contador de Flexiones
+<img src="logo.png" alt="Flex-Up · Push-Up Trainer" width="260">
+
+# Flex-Up · Contador de Flexiones
 
 App web que cuenta tus flexiones con la cámara del móvil y corrige tu técnica
 mientras las haces. No necesita instalación ni conexión: todo el análisis ocurre

@@ -28,7 +28,16 @@ Desplegada en GitHub Pages: https://pedrocuadracarri.github.io/flexiones/
 | `styles.css` | Todo el estilo; variables de color en `:root` |
 | `app.js` | Toda la lógica, en secciones separadas por comentarios `// --- nombre ---` |
 | `sw.js` | Service worker: caché de la app y del modelo |
-| `manifest.webmanifest`, `icon.svg` | Instalación como PWA |
+| `manifest.webmanifest` | Instalación como PWA |
+| `logo.png` | Marca en la pantalla de preparación |
+| `icon-192.png`, `icon-512.png` | Iconos de la PWA y favicon |
+
+Los tres PNG salen de un JPEG con fondo de gimnasio (`~/Downloads/Flexiones.jpeg`).
+El fondo se quita por saturación y oscuridad, no por color plano, porque es una
+foto desenfocada y no un blanco liso. En `logo.png` la tipografía azul marino se
+recolorea a tinta clara —solo los píxeles no naranjas de la mitad inferior— para
+que se lea sobre el fondo oscuro de la app; la figura y las flechas no se tocan.
+Si hay que regenerarlos, ese es el procedimiento.
 
 `app.js` está ordenado así: geometría → encuadre y calibración → lógica de
 repeticiones → fatiga → clip → series y descansos → voz y vibración → render →

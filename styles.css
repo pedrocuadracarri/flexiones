@@ -39,7 +39,9 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 }
 
 /* ─── preparar ──────────────────────────────────────────────── */
+.hero { text-align: center; }
 .hero h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; }
+.logo { width: min(230px, 62%); height: auto; display: inline-block; }
 .suggest { margin: 6px 0 0; font-size: 13px; color: var(--ink2); }
 .suggest b { color: var(--ink); }
 
