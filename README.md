@@ -23,6 +23,11 @@ App web que cuenta flexiones con la cámara y evalúa la técnica en tiempo real
 - **Series y descansos**: fija series, reps por serie y descanso; la serie se cierra
   sola al llegar al objetivo y la cuenta atrás del descanso se avisa por voz
   (o marca *Libre* para contar sin objetivo).
+- **Avisos por vibración** además de la voz, para cuando hay ruido alrededor.
+- **Objetivo sugerido**: propone el plan de hoy a partir de la última sesión
+  (sube una rep por serie si la calidad fue 80 o más).
+- **Exportar / importar** el historial en JSON; al importar se fusiona por fecha,
+  no se reemplaza.
 - **Historial y progreso**: sesiones guardadas en el navegador (localStorage), con
   totales, récord, racha de días y gráficas de reps y calidad por sesión.
 - **Offline**: un service worker cachea la app y el modelo (~5 MB), así que después

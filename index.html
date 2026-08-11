@@ -38,6 +38,8 @@
     <video id="clip" playsinline muted loop controls></video>
   </div>
 
+  <p id="suggest" class="suggest" hidden></p>
+
   <div class="plan">
     <label>Series <input type="number" id="setsInput" min="1" max="10" value="3"></label>
     <label>Reps <input type="number" id="targetInput" min="1" max="100" value="10"></label>
@@ -51,6 +53,7 @@
     <button id="stopBtn" disabled>Terminar</button>
     <button id="recalBtn" class="ghost" hidden>Recalibrar</button>
     <label class="chk"><input type="checkbox" id="voice" checked> Voz</label>
+    <label class="chk"><input type="checkbox" id="haptics" checked> Vibrar</label>
   </div>
   </div>
 
@@ -61,7 +64,12 @@
       <thead><tr><th>Fecha</th><th>Reps</th><th>Calidad</th><th>Tiempo</th></tr></thead>
       <tbody></tbody>
     </table>
-    <button id="clearHistory" class="link">Borrar historial</button>
+    <div class="histActions">
+      <button id="exportBtn" class="link">Exportar</button>
+      <button id="importBtn" class="link">Importar</button>
+      <button id="clearHistory" class="link">Borrar historial</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
   </details>
 </main>
 

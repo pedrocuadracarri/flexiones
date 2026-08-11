@@ -53,6 +53,11 @@ const el = {
   restInput: document.getElementById("restInput"),
   freeMode: document.getElementById("freeMode"),
   voice: document.getElementById("voice"),
+  haptics: document.getElementById("haptics"),
+  suggest: document.getElementById("suggest"),
+  exportBtn: document.getElementById("exportBtn"),
+  importBtn: document.getElementById("importBtn"),
+  importFile: document.getElementById("importFile"),
   historyBody: document.querySelector("#historyTable tbody"),
   clearHistory: document.getElementById("clearHistory"),
 };
@@ -62,6 +67,7 @@ let landmarker = null;
 let stream = null;
 let running = false;
 let lastTs = -1;
+let fps = 0;
 
 const session = {
   reps: 0,
@@ -288,7 +294,7 @@ function processFrame(lm) {
     resetRep();
   }
 
-  setStatus(`Fase: ${rep.phase === "down" ? "abajo" : "arriba"} · codo ${Math.round(smoothElbow)}°`);
+  setStatus(`Fase: ${rep.phase === "down" ? "abajo" : "arriba"} · codo ${Math.round(smoothElbow)}° · ${Math.round(fps)} fps`);
 }
 
 function completeRep() {
@@ -347,9 +353,11 @@ function completeRep() {
   if (issues.length === 0) {
     showFeedback([["good", `Rep ${session.reps}: técnica correcta (${Math.round(rep.minElbow)}°).`]]);
     speak(String(spoken));
+    buzz(40);
   } else {
     showFeedback(issues);
     speak(`${spoken}. ${issues[0][1]}`);
+    buzz([30, 70, 30]);
   }
 
   if (!plan.free && setReps >= plan.target) endSet();
@@ -449,6 +457,7 @@ function endSet() {
   el.skipBtn.hidden = false;
   el.phase.textContent = "descanso";
   speak(`Serie ${currentSet} completada. Descansa ${plan.rest} segundos`);
+  buzz([200, 100, 200]);
 }
 
 function tickRest() {
@@ -477,6 +486,7 @@ function startNextSet() {
   updateCounter();
   el.phase.textContent = "arriba";
   speak(`Serie ${currentSet}. Vamos`);
+  buzz(400);
 }
 
 function showFeedback(items) {
@@ -491,6 +501,11 @@ function showFeedback(items) {
 
 function setStatus(text) {
   el.status.textContent = text;
+}
+
+// Aviso táctil: en un gimnasio con ruido la voz no llega, la vibración sí.
+function buzz(pattern) {
+  if (el.haptics.checked) navigator.vibrate?.(pattern);
 }
 
 let lastSpoken = 0;
@@ -530,11 +545,14 @@ function draw(lm) {
   }
 }
 
+const MIN_FRAME_MS = 1000 / 24;   // inferir más rápido no mejora la medida y calienta el móvil
+
 function loop() {
   if (!running) return;
   if (el.video.readyState >= 2) {
     const ts = performance.now();
-    if (ts !== lastTs) {
+    if (ts - lastTs >= MIN_FRAME_MS) {
+      fps = fps ? fps * 0.9 + (1000 / (ts - lastTs)) * 0.1 : 1000 / (ts - lastTs);
       lastTs = ts;
       const result = landmarker.detectForVideo(el.video, ts);
       // a píxeles: en coordenadas normalizadas los ángulos salen deformados
@@ -694,7 +712,10 @@ function stop() {
   showFeedback(summary);
   speak(`Sesión terminada. ${session.reps} flexiones. Calidad ${avg} sobre 100.`);
 
-  saveSession({ date: Date.now(), reps: session.reps, quality: avg, duration });
+  saveSession({
+    date: Date.now(), reps: session.reps, quality: avg, duration,
+    sets: plan.free ? null : currentSet, target: plan.free ? null : plan.target,
+  });
 }
 
 // --- historial ---------------------------------------------------------
@@ -712,6 +733,54 @@ function saveSession(entry) {
   renderHistory();
 }
 
+// Propone el objetivo de hoy: sube una rep por serie si la última sesión
+// salió con buena técnica, y lo mantiene si no.
+function suggestPlan() {
+  const [last] = loadHistory();
+  if (!last) { el.suggest.hidden = true; return; }
+
+  const sets = last.sets || plan.sets;
+  const target = (last.target || Math.round(last.reps / sets)) + (last.quality >= 80 ? 1 : 0);
+  el.suggest.hidden = false;
+  el.suggest.innerHTML =
+    `Última sesión: ${last.reps} reps, calidad ${last.quality}. Hoy: <b>${sets}×${target}</b> `;
+  const use = document.createElement("button");
+  use.className = "link";
+  use.textContent = "usar";
+  use.onclick = () => {
+    el.setsInput.value = sets;
+    el.targetInput.value = target;
+    el.freeMode.checked = false;
+    readPlan();
+  };
+  el.suggest.appendChild(use);
+}
+
+function exportHistory() {
+  const blob = new Blob([localStorage.getItem(STORE) || "[]"], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `flexiones-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Fusiona por fecha en vez de reemplazar: importar no borra lo que ya tienes.
+async function importHistory(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data)) throw new Error("formato");
+    const byDate = new Map([...loadHistory(), ...data.filter(s => s?.date && s.reps != null)]
+      .map(s => [s.date, s]));
+    const merged = [...byDate.values()].sort((a, b) => b.date - a.date).slice(0, 50);
+    localStorage.setItem(STORE, JSON.stringify(merged));
+    renderHistory();
+    showFeedback([["good", `Historial importado: ${merged.length} sesiones en total.`]]);
+  } catch {
+    showFeedback([["bad", "Ese archivo no es un historial válido."]]);
+  }
+}
+
 function renderHistory() {
   const list = loadHistory();
   el.historyBody.innerHTML = "";
@@ -721,6 +790,7 @@ function renderHistory() {
     el.historyBody.appendChild(tr);
   }
   renderProgress(list);
+  suggestPlan();
 }
 
 // --- progreso ----------------------------------------------------------
@@ -835,6 +905,13 @@ for (const i of [el.setsInput, el.targetInput, el.restInput, el.freeMode]) {
   i.addEventListener("change", readPlan);
 }
 el.skipBtn.addEventListener("click", () => { restUntil = 0; });
+el.exportBtn.addEventListener("click", exportHistory);
+el.importBtn.addEventListener("click", () => el.importFile.click());
+el.importFile.addEventListener("change", e => {
+  const [file] = e.target.files;
+  if (file) importHistory(file);
+  e.target.value = "";
+});
 
 el.startBtn.addEventListener("click", start);
 el.stopBtn.addEventListener("click", stop);

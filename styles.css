@@ -104,6 +104,9 @@ main {
 #clip { width: 100%; max-width: 260px; border-radius: 10px; background: #000; }
 
 /* --- plan de entrenamiento --- */
+.suggest { margin: 0; font-size: 12px; color: #8b95a5; }
+.suggest b { color: #e6e9ef; font-size: 14px; }
+.histActions { display: flex; gap: 14px; }
 .plan { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: #8b95a5; }
 .plan label { display: flex; gap: 5px; align-items: center; }
 .plan input[type=number] {
@@ -113,11 +116,11 @@ main {
 .plan input:disabled { opacity: .5; }
 
 /* --- controles --- */
-.controls { display: flex; gap: 8px; align-items: center; }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 button {
   background: #2563eb; color: #fff; border: 0; border-radius: 10px;
   padding: 14px 20px; font-size: 15px; font-weight: 600; cursor: pointer;
-  flex: 1;
+  flex: 1 1 120px;
   touch-action: manipulation;
 }
 #stopBtn, button.ghost { background: #374151; }
