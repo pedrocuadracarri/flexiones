@@ -63,18 +63,25 @@ bucle. Si lo llamas suelto (por ejemplo en un test), avanza de serie de más.
    devuelve `x`/`y` en 0–1 respecto a ancho y alto por separado, así que en vídeo
    16:9 los ángulos salen deformados. El bucle convierte a píxeles antes de
    pasar los puntos a `processFrame`. No metas geometría antes de esa conversión.
-2. **Los umbrales son relativos a tu calibración, no absolutos.** `cal.upElbow` y
+2. **Contar no puede depender solo de la calibración.** Con el móvil en el suelo
+   la perspectiva puede hacer que un brazo estirado se mida como 150°, y un
+   umbral fijo derivado de ahí resulta inalcanzable: cero repeticiones y la app
+   pareciendo rota. Por eso `triggers()` observa el recorrido que estás haciendo
+   de verdad y coloca los disparadores en su punto medio, quedándose siempre con
+   el más permisivo entre ese y el de la calibración. El aviso «te faltaron X°»
+   existe para que un intento corto nunca parezca una avería.
+3. **Los umbrales de técnica son relativos a tu calibración, no absolutos.** `cal.upElbow` y
    `cal.neutralBody` se miden en 3 s de plancha; de ahí salen `cal.upAngle` y
    `cal.downAngle`, y la desviación de cadera se mide contra `cal.neutralBody`.
    Comparar contra 180° teóricos genera falsos avisos.
-3. **El clip se graba por repetición, no como buffer continuo.** Un trozo suelto
+4. **El clip se graba por repetición, no como buffer continuo.** Un trozo suelto
    de un `MediaRecorder` no es reproducible (le faltan las cabeceras). Se arranca
    al empezar la bajada y se para al cerrar la rep.
-4. **`el.canvas.captureStream()` graba el canvas, no la cámara**, y por eso el
+5. **`el.canvas.captureStream()` graba el canvas, no la cámara**, y por eso el
    clip lleva el esqueleto dibujado. Si grabaras `stream` perderías eso.
-5. **El service worker es red-primero para los archivos propios** y caché-primero
+6. **El service worker es red-primero para los archivos propios** y caché-primero
    para el CDN (URLs con versión). Al revés servirías una versión vieja de la app.
-6. **Especificidad CSS**: la regla que muestra cada pantalla es
+7. **Especificidad CSS**: la regla que muestra cada pantalla es
    `#app[data-screen="x"] [data-name="x"]`. Cualquier `display` que quieras
    imponer después (por ejemplo el `grid` de horizontal) necesita al menos esa
    especificidad o no se aplica.
@@ -87,7 +94,8 @@ Todos en `app.js`, arriba o en la función que los usa.
 |---|---|---|
 | Profundidad correcta | codo ≤ 90° | `GOOD_DEPTH` |
 | Poco recorrido / falta profundidad | > 110° / > 90° | `completeRep` |
-| Entra en bajada / vuelve a arriba | `upElbow − 60` (85–105) / `upElbow − 12` | `runCalibration` |
+| Entra en bajada / vuelve a arriba | `upElbow − 50` (85–115) / `upElbow − 12` | `runCalibration` |
+| Disparadores adaptativos | punto medio ±10% del recorrido observado, si ese recorrido ≥ 45° | `triggers` |
 | Cadera desviada: aviso / grave | > 12° / > 20° del neutro | `completeRep` |
 | Aviso de cadera en vivo | > 18° durante la bajada | `processFrame` |
 | Gusano | cadera toca fondo > 200 ms antes y ya subió > 5% del torso | `completeRep` |

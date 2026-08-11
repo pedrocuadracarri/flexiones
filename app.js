@@ -32,6 +32,14 @@ const cal = {
   startedAt: 0,
 };
 
+// Recorrido que estás haciendo de verdad, medido sobre la marcha. Si la
+// calibración quedó corta (móvil en el suelo, perspectiva) los umbrales fijos
+// pueden ser inalcanzables y no contarías ninguna repetición; con esto los
+// disparadores se adaptan a tu rango real.
+const obs = { min: 180, max: 0, t: 0 };
+const OBS_WINDOW = 12000;   // ms sin novedad antes de reiniciar la ventana
+const OBS_MIN_RANGE = 45;   // grados de recorrido mínimos para fiarse
+
 let stage = "framing"; // framing → calibrating → counting ⇄ resting
 
 // Plan de entrenamiento
@@ -216,7 +224,9 @@ function runCalibration(lm, side, elbow, body) {
   cal.upElbow = median(cal.samples.map(s => s[0]));
   cal.neutralBody = median(cal.samples.map(s => s[1]));
   cal.upAngle = cal.upElbow - 12;
-  cal.downAngle = Math.min(105, Math.max(85, cal.upElbow - 60));
+  cal.downAngle = Math.min(115, Math.max(85, cal.upElbow - 50));
+  obs.min = obs.max = cal.upElbow;
+  obs.t = 0;
 
   stage = "counting";
   smoothElbow = cal.upElbow;
@@ -228,6 +238,28 @@ function runCalibration(lm, side, elbow, body) {
 }
 
 // --- lógica de repeticiones -------------------------------------------
+
+let shortAttempt = 0;   // punto más bajo de un intento que no llegó a disparar
+let atTop = true;       // ¿venías de arriba? si no, no hay intento que juzgar
+
+function trackRange(a, now) {
+  if (now - obs.t > OBS_WINDOW) { obs.min = obs.max = a; obs.t = now; return; }
+  if (a < obs.min) { obs.min = a; obs.t = now; }
+  if (a > obs.max) { obs.max = a; obs.t = now; }
+}
+
+// Disparadores de bajada y subida. Si tu recorrido real es amplio, se colocan
+// en torno a su punto medio; si no, se usan los de la calibración. Siempre se
+// elige el más permisivo de los dos, que es lo que evita quedarse en 0.
+function triggers() {
+  const range = obs.max - obs.min;
+  if (range < OBS_MIN_RANGE) return { down: cal.downAngle, up: cal.upAngle };
+  const mid = (obs.max + obs.min) / 2;
+  return {
+    down: Math.max(cal.downAngle, mid - range * 0.1),
+    up: Math.min(cal.upAngle, mid + range * 0.1),
+  };
+}
 
 function resetRep() {
   rep.minElbow = 180;
@@ -254,7 +286,8 @@ function processFrame(lm) {
     smoothElbow = smoothElbow * 0.6 + rawElbow * 0.4;
     updateGauge();
   }
-  setDebug(`codo ${Math.round(smoothElbow)}° · cuerpo ${body ? Math.round(body.raw) : "–"}° · ${Math.round(fps)} fps`);
+  const t = triggers();
+  setDebug(`codo ${Math.round(smoothElbow)}° · cuenta bajando <${Math.round(t.down)}° y subiendo >${Math.round(t.up)}° · cuerpo ${body ? Math.round(body.raw) : "–"}° · ${Math.round(fps)} fps`);
 
   if (stage === "framing") {
     const problem = framingProblem(lm, side);
@@ -308,16 +341,34 @@ function processFrame(lm) {
     if (hipY !== null) rep.hipYAtElbowMin = hipY;
   }
 
-  if (rep.phase === "up" && smoothElbow < cal.downAngle) {
+  trackRange(smoothElbow, now);
+  const trig = triggers();
+
+  if (rep.phase === "up" && smoothElbow < trig.down) {
     rep.phase = "down";
     rep.descending = true;
     el.phase.textContent = "bajando";
     startClip();
-  } else if (rep.phase === "down" && smoothElbow > cal.upAngle) {
+    shortAttempt = 0;
+    atTop = false;   // ya no hay intento que juzgar hasta que vuelvas arriba
+  } else if (rep.phase === "down" && smoothElbow > trig.up) {
     rep.phase = "up";
     el.phase.textContent = "arriba";
     if (rep.descending) completeRep();
     resetRep();
+  } else if (rep.phase === "up") {
+    // bajaste pero te quedaste por encima del disparador: dilo, o parece averiado
+    if (smoothElbow > cal.upElbow - 15) {
+      atTop = true;
+      shortAttempt = 0;
+    } else if (atTop) {
+      if (!shortAttempt || smoothElbow < shortAttempt) shortAttempt = smoothElbow;
+      if (shortAttempt < cal.upElbow - 20 && smoothElbow > shortAttempt + 10) {
+        setCoach(`Te faltaron ${Math.round(shortAttempt - trig.down)}° para que contase. Baja un poco más.`, "warn");
+        atTop = false;
+        shortAttempt = 0;
+      }
+    }
   }
 
   el.phase.textContent = rep.phase === "down" ? "bajando" : "arriba";
