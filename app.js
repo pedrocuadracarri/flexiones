@@ -259,14 +259,25 @@ async function openCamera() {
   el.video.srcObject = stream;
   await el.video.play();
 
-  el.canvas.width = el.video.videoWidth;
-  el.canvas.height = el.video.videoHeight;
+  syncVideoSize();
   el.canvas.classList.toggle("mirror", facingMode === "user");
 
   const cams = (await navigator.mediaDevices.enumerateDevices())
     .filter(d => d.kind === "videoinput");
   el.switchBtn.hidden = cams.length < 2;
 }
+
+// El encuadre real cambia al girar el móvil: reajusta canvas y proporción del marco
+function syncVideoSize() {
+  const w = el.video.videoWidth, h = el.video.videoHeight;
+  if (!w || !h) return;
+  el.canvas.width = w;
+  el.canvas.height = h;
+  document.querySelector(".stage").style.setProperty("--ar", `${w} / ${h}`);
+}
+
+el.video.addEventListener("resize", syncVideoSize);
+window.addEventListener("orientationchange", () => setTimeout(syncVideoSize, 300));
 
 async function switchCamera() {
   facingMode = facingMode === "user" ? "environment" : "user";

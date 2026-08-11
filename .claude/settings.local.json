@@ -10,7 +10,14 @@
       "PowerShell(git init -b main)",
       "PowerShell(git config user.name \"Pedro\")",
       "PowerShell(git config user.email \"pedrocuadracarri@gmail.com\")",
-      "PowerShell(git add -A)"
+      "PowerShell(git add -A)",
+      "PowerShell(winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements --silent)",
+      "PowerShell($env:Path += \";C:\\\\Program Files\\\\GitHub CLI\"; gh --version; gh auth status)",
+      "PowerShell($env:Path += \";C:\\\\Program Files\\\\GitHub CLI\"; gh auth status)",
+      "PowerShell($env:Path += \";C:\\\\Program Files\\\\GitHub CLI\"; gh repo create flexiones --public --source=. --remote=origin --push --description \"Contador de flexiones con la camara: cuenta reps y evalua tecnica con MediaPipe Pose\")",
+      "PowerShell($env:Path += \";C:\\\\Program Files\\\\GitHub CLI\"; gh api -X POST repos/pedrocuadracarri/flexiones/pages -f \"source[branch]=main\" -f \"source[path]=/\" --jq '.html_url, .status')",
+      "PowerShell($env:Path += \";C:\\\\Program Files\\\\GitHub CLI\"; Start-Sleep -Seconds 45; gh api repos/pedrocuadracarri/flexiones/pages --jq '.status'; \\(Invoke-WebRequest -Uri \"https://pedrocuadracarri.github.io/flexiones/\" -UseBasicParsing\\).StatusCode)",
+      "PowerShell(git push -q origin main)"
     ]
   }
 }
