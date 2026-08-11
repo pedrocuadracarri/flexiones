@@ -14,7 +14,10 @@ App web que cuenta flexiones con la cámara y evalúa la técnica en tiempo real
 - **Alineación**: ángulo hombro–cadera–rodilla respecto a tu neutro; detecta cadera
   caída o elevada y avisa por voz durante la bajada, no al terminar.
 - **Tempo**: avisa si la repetición es demasiado rápida o demasiado lenta.
-- **Historial**: sesiones guardadas en el navegador (localStorage).
+- **Historial y progreso**: sesiones guardadas en el navegador (localStorage), con
+  totales, récord, racha de días y gráficas de reps y calidad por sesión.
+- **Offline**: un service worker cachea la app y el modelo (~5 MB), así que después
+  de la primera visita arranca al instante y funciona sin datos.
 
 ## Uso
 

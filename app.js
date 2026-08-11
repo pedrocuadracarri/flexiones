@@ -511,6 +511,89 @@ function renderHistory() {
     tr.innerHTML = `<td>${new Date(s.date).toLocaleString("es-ES")}</td><td>${s.reps}</td><td>${s.quality}/100</td><td>${s.duration}s</td>`;
     el.historyBody.appendChild(tr);
   }
+  renderProgress(list);
+}
+
+// --- progreso ----------------------------------------------------------
+
+const dayKey = ts => new Date(ts).toLocaleDateString("es-ES");
+
+// Días seguidos entrenando hasta hoy (o hasta ayer, si aún no has entrenado)
+function streak(list) {
+  const days = new Set(list.map(s => dayKey(s.date)));
+  const day = new Date();
+  if (!days.has(dayKey(day))) day.setDate(day.getDate() - 1);
+  let n = 0;
+  while (days.has(dayKey(day))) { n++; day.setDate(day.getDate() - 1); }
+  return n;
+}
+
+function tile(value, label) {
+  return `<div class="tile"><b>${value}</b><span>${label}</span></div>`;
+}
+
+function barChart(data, label) {
+  const W = 320, H = 96, pad = { t: 16, r: 4, b: 16, l: 26 };
+  const max = Math.max(...data.map(d => d.v), 1);
+  const bw = (W - pad.l - pad.r) / data.length;
+  const base = H - pad.b;
+  const bars = data.map((d, i) => {
+    const h = (base - pad.t) * d.v / max;
+    return `<rect x="${(pad.l + i * bw + 1).toFixed(1)}" y="${(base - h).toFixed(1)}"
+      width="${Math.max(2, bw - 3).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="#60a5fa">
+      <title>${d.label}: ${d.v} ${label}</title></rect>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label} por sesión">
+    <text x="0" y="9" class="ct">${label} por sesión</text>
+    <text x="0" y="${pad.t + 3}" class="cl">${max}</text>
+    <text x="0" y="${base + 3}" class="cl">0</text>
+    <line x1="${pad.l}" y1="${base}" x2="${W - pad.r}" y2="${base}" class="cg"/>
+    ${bars}
+    <text x="${pad.l}" y="${H - 3}" class="cl">${data[0].label}</text>
+    <text x="${W - pad.r}" y="${H - 3}" text-anchor="end" class="cl">${data.at(-1).label}</text>
+  </svg>`;
+}
+
+function lineChart(data, label) {
+  const W = 320, H = 80, pad = { t: 16, r: 6, b: 12, l: 26 };
+  const x = i => pad.l + (W - pad.l - pad.r) * (data.length === 1 ? .5 : i / (data.length - 1));
+  const y = v => H - pad.b - (H - pad.t - pad.b) * v / 100;
+  const pts = data.map((d, i) => `${x(i).toFixed(1)},${y(d.v).toFixed(1)}`).join(" ");
+  const dots = data.map((d, i) =>
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(d.v).toFixed(1)}" r="4" fill="#60a5fa" stroke="#0e1116" stroke-width="2">
+      <title>${d.label}: ${d.v}/100</title></circle>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label} por sesión">
+    <text x="0" y="9" class="ct">${label} (0-100)</text>
+    <line x1="${pad.l}" y1="${y(100)}" x2="${W - pad.r}" y2="${y(100)}" class="cg"/>
+    <line x1="${pad.l}" y1="${y(0)}" x2="${W - pad.r}" y2="${y(0)}" class="cg"/>
+    <text x="0" y="${y(100) + 3}" class="cl">100</text>
+    <text x="0" y="${y(0) + 3}" class="cl">0</text>
+    <polyline points="${pts}" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linejoin="round"/>
+    ${dots}
+  </svg>`;
+}
+
+function renderProgress(list) {
+  const box = document.getElementById("progress");
+  if (!list.length) {
+    box.innerHTML = `<p class="empty">Aún no hay sesiones guardadas.</p>`;
+    return;
+  }
+
+  const total = list.reduce((a, s) => a + s.reps, 0);
+  const best = Math.max(...list.map(s => s.reps));
+  const avg = Math.round(list.reduce((a, s) => a + s.quality, 0) / list.length);
+  const tiles = `<div class="tiles">
+    ${tile(total, "flexiones")}${tile(best, "récord")}${tile(`${avg}`, "calidad media")}${tile(streak(list), "días seguidos")}
+  </div>`;
+
+  const recent = list.slice(0, 14).reverse();
+  const labels = recent.map(s => new Date(s.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" }));
+  const charts = recent.length < 2 ? "" : `
+    <div class="chart">${barChart(recent.map((s, i) => ({ v: s.reps, label: labels[i] })), "Reps")}</div>
+    <div class="chart">${lineChart(recent.map((s, i) => ({ v: s.quality, label: labels[i] })), "Calidad")}</div>`;
+
+  box.innerHTML = tiles + charts;
 }
 
 el.startBtn.addEventListener("click", start);
@@ -527,3 +610,7 @@ el.clearHistory.addEventListener("click", () => {
 });
 
 renderHistory();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+}

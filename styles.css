@@ -108,6 +108,19 @@ button.link { background: none; color: #8b95a5; padding: 6px 0; font-weight: 400
 .chk { font-size: 13px; color: #8b95a5; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
 .chk input { width: 18px; height: 18px; }
 
+/* --- progreso --- */
+#progress { max-width: 420px; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 14px; }
+.tile { background: #151a22; border-radius: 10px; padding: 10px 8px; text-align: center; }
+.tile b { display: block; font-size: 22px; font-weight: 700; }
+.tile span { font-size: 10px; color: #8b95a5; text-transform: uppercase; letter-spacing: .06em; }
+.chart { margin-bottom: 10px; }
+.chart svg { width: 100%; height: auto; overflow: visible; }
+.ct { fill: #e6e9ef; font-size: 10px; font-weight: 600; }
+.cl { fill: #8b95a5; font-size: 8px; }
+.cg { stroke: #2a3240; stroke-width: 1; }
+.empty { color: #8b95a5; font-size: 13px; }
+
 /* --- historial --- */
 .history { font-size: 14px; }
 .history summary { color: #8b95a5; cursor: pointer; padding: 8px 0; }
