@@ -21,7 +21,14 @@ const cal = {
   startedAt: 0,
 };
 
-let stage = "framing"; // framing → calibrating → counting
+let stage = "framing"; // framing → calibrating → counting ⇄ resting
+
+// Plan de entrenamiento
+const plan = { sets: 3, target: 10, rest: 60, free: false };
+let currentSet = 1;
+let setReps = 0;
+let restUntil = 0;
+let restCue = 0;
 
 const el = {
   video: document.getElementById("video"),
@@ -36,6 +43,12 @@ const el = {
   stopBtn: document.getElementById("stopBtn"),
   switchBtn: document.getElementById("switchBtn"),
   recalBtn: document.getElementById("recalBtn"),
+  skipBtn: document.getElementById("skipBtn"),
+  setChip: document.getElementById("setChip"),
+  setsInput: document.getElementById("setsInput"),
+  targetInput: document.getElementById("targetInput"),
+  restInput: document.getElementById("restInput"),
+  freeMode: document.getElementById("freeMode"),
   voice: document.getElementById("voice"),
   historyBody: document.querySelector("#historyTable tbody"),
   clearHistory: document.getElementById("clearHistory"),
@@ -276,18 +289,70 @@ function completeRep() {
 
   score = Math.max(0, score);
   session.reps += 1;
+  setReps += 1;
   session.scores.push(score);
   for (const [, msg] of issues) session.issues[msg] = (session.issues[msg] || 0) + 1;
 
-  el.reps.textContent = session.reps;
+  updateCounter();
+  const spoken = plan.free ? session.reps : setReps;
 
   if (issues.length === 0) {
     showFeedback([["good", `Rep ${session.reps}: técnica correcta (${Math.round(rep.minElbow)}°).`]]);
-    speak(String(session.reps));
+    speak(String(spoken));
   } else {
     showFeedback(issues);
-    speak(`${session.reps}. ${issues[0][1]}`);
+    speak(`${spoken}. ${issues[0][1]}`);
   }
+
+  if (!plan.free && setReps >= plan.target) endSet();
+}
+
+// --- series y descansos ------------------------------------------------
+
+function updateCounter() {
+  el.reps.textContent = plan.free ? session.reps : setReps;
+  el.setChip.hidden = plan.free;
+  el.setChip.querySelector("b").textContent = `${currentSet}/${plan.sets} · ${plan.target}`;
+}
+
+function endSet() {
+  if (currentSet >= plan.sets) {
+    speak("Última serie completada. Buen trabajo");
+    setTimeout(stop, 1200);
+    return;
+  }
+  stage = "resting";
+  restUntil = performance.now() + plan.rest * 1000;
+  restCue = 0;
+  el.skipBtn.hidden = false;
+  el.phase.textContent = "descanso";
+  speak(`Serie ${currentSet} completada. Descansa ${plan.rest} segundos`);
+}
+
+function tickRest() {
+  const left = Math.ceil((restUntil - performance.now()) / 1000);
+  if (left <= 0) return startNextSet();
+
+  el.reps.textContent = left;
+  setStatus(`Descanso · serie ${currentSet + 1} de ${plan.sets} en ${left} s`);
+  if (restCue !== left && (left === 10 || left <= 3)) {
+    restCue = left;
+    speak(left === 10 ? "Diez segundos" : String(left));
+  }
+}
+
+function startNextSet() {
+  currentSet += 1;
+  setReps = 0;
+  restUntil = 0;
+  el.skipBtn.hidden = true;
+  stage = "counting";
+  rep.phase = "up";
+  smoothElbow = cal.upElbow;
+  resetRep();
+  updateCounter();
+  el.phase.textContent = "arriba";
+  speak(`Serie ${currentSet}. Vamos`);
 }
 
 function showFeedback(items) {
@@ -356,7 +421,8 @@ function loop() {
         visibility: k.visibility,
       }));
       draw(lm);
-      if (lm) processFrame(lm);
+      if (stage === "resting") tickRest();
+      else if (lm) processFrame(lm);
       else {
         setStatus("No te detecto. Colócate dentro del encuadre.");
         framedSince = 0;
@@ -442,7 +508,10 @@ async function start() {
     session.scores = [];
     session.issues = {};
     session.startedAt = Date.now();
-    el.reps.textContent = "0";
+    currentSet = 1;
+    setReps = 0;
+    updateCounter();
+    setPlanEnabled(false);
     el.feedback.innerHTML = "";
     resetRep();
     rep.phase = "up";
@@ -466,6 +535,8 @@ function stop() {
   el.stopBtn.disabled = true;
   el.startBtn.disabled = false;
   el.recalBtn.hidden = true;
+  el.skipBtn.hidden = true;
+  setPlanEnabled(true);
   stream?.getTracks().forEach(t => t.stop());
   stream = null;
   wakeLock?.release?.();
@@ -480,7 +551,8 @@ function stop() {
   const duration = Math.round((Date.now() - session.startedAt) / 1000);
   const top = Object.entries(session.issues).sort((a, b) => b[1] - a[1]).slice(0, 2);
 
-  const summary = [["good", `Sesión: ${session.reps} flexiones · calidad media ${avg}/100 · ${duration}s`]];
+  const series = plan.free ? "" : ` · ${currentSet} de ${plan.sets} series`;
+  const summary = [["good", `Sesión: ${session.reps} flexiones${series} · calidad media ${avg}/100 · ${duration}s`]];
   for (const [msg, n] of top) summary.push(["warn", `${n} reps: ${msg}`]);
   showFeedback(summary);
   speak(`Sesión terminada. ${session.reps} flexiones. Calidad ${avg} sobre 100.`);
@@ -596,6 +668,37 @@ function renderProgress(list) {
   box.innerHTML = tiles + charts;
 }
 
+// --- plan ---------------------------------------------------------------
+
+const PLAN_STORE = "flexiones.plan";
+
+function readPlan() {
+  plan.sets = Math.max(1, +el.setsInput.value || 3);
+  plan.target = Math.max(1, +el.targetInput.value || 10);
+  plan.rest = Math.max(10, +el.restInput.value || 60);
+  plan.free = el.freeMode.checked;
+  localStorage.setItem(PLAN_STORE, JSON.stringify(plan));
+  updateCounter();
+}
+
+function restorePlan() {
+  try { Object.assign(plan, JSON.parse(localStorage.getItem(PLAN_STORE)) || {}); } catch { /* valores por defecto */ }
+  el.setsInput.value = plan.sets;
+  el.targetInput.value = plan.target;
+  el.restInput.value = plan.rest;
+  el.freeMode.checked = plan.free;
+  updateCounter();
+}
+
+function setPlanEnabled(on) {
+  for (const i of [el.setsInput, el.targetInput, el.restInput, el.freeMode]) i.disabled = !on;
+}
+
+for (const i of [el.setsInput, el.targetInput, el.restInput, el.freeMode]) {
+  i.addEventListener("change", readPlan);
+}
+el.skipBtn.addEventListener("click", () => { restUntil = 0; });
+
 el.startBtn.addEventListener("click", start);
 el.stopBtn.addEventListener("click", stop);
 el.switchBtn.addEventListener("click", switchCamera);
@@ -609,6 +712,7 @@ el.clearHistory.addEventListener("click", () => {
   renderHistory();
 });
 
+restorePlan();
 renderHistory();
 
 if ("serviceWorker" in navigator) {
