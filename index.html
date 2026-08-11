@@ -22,6 +22,11 @@
       <p id="suggest" class="suggest" hidden></p>
     </header>
 
+    <div class="segmented" role="group" aria-label="Vista de la cámara">
+      <button class="seg" data-view="side">De lado</button>
+      <button class="seg" data-view="front">De frente</button>
+    </div>
+
     <div class="steppers">
       <div class="stepper">
         <button class="step" data-field="sets" data-delta="-1" aria-label="Menos series">−</button>
@@ -49,7 +54,7 @@
       <label class="switch"><input type="checkbox" id="haptics" checked> Vibración</label>
     </div>
 
-    <p class="tip">Apoya el móvil <b>de lado</b>, a ras de suelo, a 1,5–2 m. Deben verse hombro, cadera y rodilla.</p>
+    <p class="tip" id="tip"></p>
 
     <details class="history">
       <summary>Progreso e historial</summary>

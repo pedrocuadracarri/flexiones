@@ -43,7 +43,7 @@ const OBS_MIN_RANGE = 45;   // grados de recorrido mínimos para fiarse
 let stage = "framing"; // framing → calibrating → counting ⇄ resting
 
 // Plan de entrenamiento
-const plan = { sets: 3, target: 10, rest: 60, free: false };
+const plan = { sets: 3, target: 10, rest: 60, free: false, view: "side" };
 let currentSet = 1;
 let setReps = 0;
 let restUntil = 0;
@@ -81,6 +81,8 @@ const el = {
   clip: document.getElementById("clip"),
   clipScore: document.getElementById("clipScore"),
   steppers: document.querySelector(".steppers"),
+  segs: [...document.querySelectorAll(".seg")],
+  tip: document.getElementById("tip"),
   setsVal: document.getElementById("setsVal"),
   targetVal: document.getElementById("targetVal"),
   restVal: document.getElementById("restVal"),
@@ -118,6 +120,8 @@ const rep = {
   startedAt: 0,
   descending: false,
   cued: false,
+  worstFlare: 0,    // apertura máxima de codos (solo vista frontal)
+  gapLR: 0,         // diferencia izquierda-derecha abajo (solo vista frontal)
   tElbowMin: 0,     // instante en que el pecho toca abajo
   hipLowY: 0,       // punto más bajo de la cadera (y crece hacia abajo)
   tHipLow: 0,
@@ -173,14 +177,32 @@ function bodyLine(lm, side) {
 
 // --- encuadre y calibración -------------------------------------------
 
+const isFront = () => plan.view === "front";
+
+function armLength(lm, side) {
+  return Math.hypot(lm[side.shoulder].x - lm[side.elbow].x, lm[side.shoulder].y - lm[side.elbow].y)
+    + Math.hypot(lm[side.elbow].x - lm[side.wrist].x, lm[side.elbow].y - lm[side.wrist].y);
+}
+
 // Devuelve null si la posición es válida, o el motivo por el que no lo es.
 function framingProblem(lm, side) {
+  const spread = Math.abs(lm[L.shoulder].x - lm[R.shoulder].x);
+
+  if (isFront()) {
+    // De frente hacen falta los dos brazos; cadera y rodilla no se ven y no se piden.
+    if (!visible(lm, L.shoulder, L.elbow, L.wrist) || !visible(lm, R.shoulder, R.elbow, R.wrist))
+      return "Tienen que verse los dos brazos enteros.";
+    const arm = Math.max(armLength(lm, L), armLength(lm, R));
+    if (arm > 0 && spread / arm < 0.35)
+      return "Ponte de frente a la cámara, no de lado.";
+    return null;
+  }
+
   if (!visible(lm, side.shoulder, side.elbow, side.wrist))
     return "Aleja la cámara: no veo bien el brazo.";
   if (!visible(lm, side.hip, side.knee))
     return "Tienen que verse también cadera y rodilla.";
 
-  const spread = Math.abs(lm[L.shoulder].x - lm[R.shoulder].x);
   const torso = Math.hypot(lm[side.shoulder].x - lm[side.hip].x, lm[side.shoulder].y - lm[side.hip].y);
   if (torso > 0 && spread / torso > 0.55)
     return "Ponte de lado a la cámara, no de frente.";
@@ -193,6 +215,33 @@ function framingProblem(lm, side) {
     return "Ponte en posición de plancha, con el cuerpo horizontal.";
 
   return null;
+}
+
+// Ángulo de codo: de lado, el del lado visible; de frente, la media de los dos.
+// Devuelve también cada lado por separado para juzgar simetría y apertura.
+function elbowReading(lm, side) {
+  const one = s => visible(lm, s.shoulder, s.elbow, s.wrist)
+    ? angle(lm[s.shoulder], lm[s.elbow], lm[s.wrist]) : null;
+
+  if (!isFront()) {
+    const a = one(side);
+    return a === null ? null : { mean: a, left: null, right: null };
+  }
+  const aL = one(L), aR = one(R);
+  if (aL === null && aR === null) return null;
+  if (aL === null || aR === null) return { mean: aL ?? aR, left: aL, right: aR };
+  return { mean: (aL + aR) / 2, left: aL, right: aR };
+}
+
+// Cuánto se separan los codos del cuerpo, en anchos de hombro. Solo tiene
+// sentido de frente: es la vista donde la apertura se ve de verdad.
+function elbowFlare(lm) {
+  if (!visible(lm, L.shoulder, R.shoulder, L.elbow, R.elbow)) return null;
+  const width = Math.abs(lm[L.shoulder].x - lm[R.shoulder].x);
+  if (width < 1) return null;
+  const outL = Math.abs(lm[L.elbow].x - lm[L.shoulder].x) / width;
+  const outR = Math.abs(lm[R.elbow].x - lm[R.shoulder].x) / width;
+  return Math.max(outL, outR);
 }
 
 function startCalibration() {
@@ -208,7 +257,8 @@ function runCalibration(lm, side, elbow, body) {
     stage = "framing";
     return;
   }
-  if (elbow > 130 && body) cal.samples.push([elbow, body.raw]);
+  // De frente no hay línea de cadera que medir: se calibra solo el codo.
+  if (elbow > 130 && (body || isFront())) cal.samples.push([elbow, body ? body.raw : 180]);
   if (left > 0) {
     setCoach(`Calibrando… ${left.toFixed(1)} s. Quieto, brazos estirados.`, "info");
     el.phase.textContent = "calibrando";
@@ -273,21 +323,26 @@ function resetRep() {
   rep.tHipLow = 0;
   rep.hipYAtElbowMin = 0;
   rep.torso = 0;
+  rep.worstFlare = 0;
+  rep.gapLR = 0;
 }
 
 function processFrame(lm) {
   const side = pickSide(lm);
-  const rawElbow = visible(lm, side.shoulder, side.elbow, side.wrist)
-    ? angle(lm[side.shoulder], lm[side.elbow], lm[side.wrist])
-    : null;
-  const body = bodyLine(lm, side);
+  const reading = elbowReading(lm, side);
+  const rawElbow = reading ? reading.mean : null;
+  const body = isFront() ? null : bodyLine(lm, side);
+  const flare = isFront() ? elbowFlare(lm) : null;
 
   if (rawElbow !== null) {
     smoothElbow = smoothElbow * 0.6 + rawElbow * 0.4;
     updateGauge();
   }
   const t = triggers();
-  setDebug(`codo ${Math.round(smoothElbow)}° · cuenta bajando <${Math.round(t.down)}° y subiendo >${Math.round(t.up)}° · cuerpo ${body ? Math.round(body.raw) : "–"}° · ${Math.round(fps)} fps`);
+  const extra = isFront()
+    ? `codos ${flare === null ? "–" : flare.toFixed(1)}×hombro`
+    : `cuerpo ${body ? Math.round(body.raw) : "–"}°`;
+  setDebug(`codo ${Math.round(smoothElbow)}° · cuenta bajando <${Math.round(t.down)}° y subiendo >${Math.round(t.up)}° · ${extra} · ${Math.round(fps)} fps`);
 
   if (stage === "framing") {
     const problem = framingProblem(lm, side);
@@ -339,7 +394,12 @@ function processFrame(lm) {
     rep.minElbow = smoothElbow;
     rep.tElbowMin = now;
     if (hipY !== null) rep.hipYAtElbowMin = hipY;
+    if (reading.left !== null && reading.right !== null) {
+      rep.gapLR = Math.abs(reading.left - reading.right);   // asimetría en el punto bajo
+    }
   }
+  // la apertura se juzga abajo, que es donde el hombro sufre
+  if (flare !== null && rep.phase === "down" && flare > rep.worstFlare) rep.worstFlare = flare;
 
   trackRange(smoothElbow, now);
   const trig = triggers();
@@ -387,9 +447,25 @@ function completeRep() {
     score -= 15;
   }
 
+  // De frente se juzga lo que de lado no se ve: apertura de codos y simetría.
+  // La cadera y el gusano quedan fuera porque desde delante no se miden.
+  if (isFront()) {
+    if (rep.worstFlare > 1.15) {
+      issues.push(["bad", "Codos muy abiertos: pégalos más al cuerpo, a unos 45°, o cargas el hombro."]);
+      score -= 25;
+    } else if (rep.worstFlare > 0.9) {
+      issues.push(["warn", "Codos algo abiertos: llévalos un poco más hacia atrás."]);
+      score -= 10;
+    }
+    if (rep.gapLR > 15) {
+      issues.push(["warn", `Un brazo baja más que el otro (${Math.round(rep.gapLR)}° de diferencia).`]);
+      score -= 10;
+    }
+  }
+
   // "Gusano": la cadera toca fondo y ya va subiendo cuando el pecho llega abajo
   const hipLead = rep.hipLowY - rep.hipYAtElbowMin;
-  const worm = rep.torso > 0 && rep.tHipLow > 0
+  const worm = !isFront() && rep.torso > 0 && rep.tHipLow > 0
     && rep.tElbowMin - rep.tHipLow > 200
     && hipLead / rep.torso > 0.05;
 
@@ -425,6 +501,9 @@ function completeRep() {
 
   const fatigue = checkFatigue();
   if (fatigue) issues.push(["warn", fatigue]);
+
+  // lo grave primero: solo el primer aviso se dice en voz y se ve en pantalla
+  issues.sort((a, b) => (a[0] === "bad" ? 0 : 1) - (b[0] === "bad" ? 0 : 1));
 
   const spoken = plan.free ? session.reps : setReps;
   pulseCount();
@@ -999,12 +1078,19 @@ function savePlan() {
   renderPlan();
 }
 
+const TIPS = {
+  side: "Apoya el móvil <b>de lado</b>, a ras de suelo, a 1,5–2 m. Deben verse hombro, cadera y rodilla. Mide profundidad, cadera y \"gusano\".",
+  front: "Pon el móvil <b>delante de ti</b>, a ras de suelo, apuntando a tu cara. Deben verse los dos brazos. Mide profundidad, apertura de codos y simetría; la cadera no se ve desde aquí.",
+};
+
 function renderPlan() {
   el.setsVal.textContent = plan.sets;
   el.targetVal.textContent = plan.target;
   el.restVal.textContent = plan.rest;
   el.freeMode.checked = plan.free;
   el.steppers.classList.toggle("off", plan.free);
+  for (const b of el.segs) b.setAttribute("aria-pressed", String(b.dataset.view === plan.view));
+  el.tip.innerHTML = TIPS[plan.view] || TIPS.side;
   updateCounter();
 }
 
@@ -1023,6 +1109,9 @@ for (const btn of document.querySelectorAll(".step")) {
   });
 }
 el.freeMode.addEventListener("change", () => { plan.free = el.freeMode.checked; savePlan(); });
+for (const b of el.segs) {
+  b.addEventListener("click", () => { plan.view = b.dataset.view; savePlan(); buzz(15); });
+}
 el.skipBtn.addEventListener("click", () => { restUntil = 0; });
 el.exportBtn.addEventListener("click", exportHistory);
 el.importBtn.addEventListener("click", () => el.importFile.click());

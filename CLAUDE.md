@@ -43,6 +43,23 @@ Si hay que regenerarlos, ese es el procedimiento.
 repeticiones → fatiga → clip → series y descansos → voz y vibración → render →
 bucle → cámara → sesión (start/stop) → historial → progreso → plan → listeners.
 
+## Dos vistas de cámara
+
+`plan.view` vale `"side"` o `"front"` y cambia qué se puede medir. No es una
+preferencia estética: son geometrías distintas.
+
+| | De lado (`side`) | De frente (`front`) |
+|---|---|---|
+| Ángulo de codo | el del lado visible | media de los dos brazos |
+| Profundidad | sí | sí |
+| Línea de cadera y «gusano» | sí | **no**, la cadera queda tapada |
+| Apertura de codos y simetría | **no**, no se aprecia | sí |
+| Encuadre exige | hombro, codo, muñeca, cadera y rodilla; hombros juntos; cuerpo horizontal | los dos brazos enteros; hombros separados |
+
+Todo lo que dependa de la vista pasa por `isFront()`. Si añades una detección,
+decide en cuál de las dos tiene sentido antes de escribirla: medir la cadera de
+frente da avisos inventados.
+
 ## Máquinas de estado
 
 Dos, y conviene no confundirlas:
@@ -101,8 +118,11 @@ Todos en `app.js`, arriba o en la función que los usa.
 | Gusano | cadera toca fondo > 200 ms antes y ya subió > 5% del torso | `completeRep` |
 | Tempo | < 0,9 s rápido, > 6 s lento | `completeRep` |
 | Fatiga | 8° menos de recorrido o 60% más lento, desde la 5ª rep | `checkFatigue` |
-| Vista frontal (rechaza) | separación de hombros > 55% del torso | `framingProblem` |
-| No es plancha (rechaza) | inclinación del cuerpo > 40° | `framingProblem` |
+| Codos abiertos: aviso / grave | codo a > 0,9 / > 1,15 anchos de hombro (solo frontal) | `completeRep` |
+| Asimetría entre brazos | > 15° abajo (solo frontal) | `completeRep` |
+| En lateral, rechaza vista frontal | separación de hombros > 55% del torso | `framingProblem` |
+| En frontal, rechaza vista lateral | separación de hombros < 35% del brazo | `framingProblem` |
+| No es plancha (rechaza, solo lateral) | inclinación del cuerpo > 40° | `framingProblem` |
 | Confianza mínima de un punto | 0.6 | `MIN_VISIBILITY` |
 | Inferencia | 24 fps | `MIN_FRAME_MS` |
 | Suavizado del ángulo de codo | EMA 0.6 / 0.4 | `processFrame` |

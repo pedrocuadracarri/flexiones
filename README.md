@@ -10,9 +10,11 @@ en el navegador y **el vídeo nunca sale de tu dispositivo**.
 
 ## Cómo se usa
 
-1. Apoya el móvil **de lado**, a ras de suelo, a metro y medio o dos. Tienen que
-   verse hombro, cadera y rodilla. De frente no funciona: la línea del cuerpo no
-   se puede medir.
+1. Elige cómo vas a colocar el móvil y ponlo a ras de suelo:
+   - **De lado**, a metro y medio o dos, viendo hombro, cadera y rodilla. Es la
+     única vista que mide la línea del cuerpo (cadera caída y "gusano").
+   - **De frente**, apuntando a tu cara, viendo los dos brazos. Aquí se miden la
+     apertura de codos y la simetría entre brazos, que de lado no se aprecian.
 2. Elige series, repeticiones y descanso (o marca *Modo libre* para contar sin
    objetivo) y pulsa **Empezar**.
 3. Colócate en plancha. La app comprueba el encuadre, se calibra contigo durante
@@ -40,11 +42,16 @@ repetición cuenta cuando bajas por debajo de tu umbral y vuelves a extender.
 **Profundidad.** Objetivo: codo a 90° o menos. El medidor lateral se llena según
 bajas y marca dónde está tu objetivo.
 
-**Alineación de cadera.** Compara tu ángulo hombro–cadera–rodilla con tu neutro y
-distingue si la cadera cae o se eleva. Avisa por voz durante la bajada, no al
-terminar, que es cuando aún puedes corregir.
+**Alineación de cadera** *(solo de lado)*. Compara tu ángulo hombro–cadera–rodilla
+con tu neutro y distingue si la cadera cae o se eleva. Avisa por voz durante la
+bajada, no al terminar, que es cuando aún puedes corregir.
 
-**"Gusano".** Compara el instante en que la cadera toca fondo con el instante en
+**Apertura de codos y simetría** *(solo de frente)*. Mide cuánto se separan los
+codos del cuerpo en anchos de hombro y avisa si los abres en cruz, que es lo que
+castiga el hombro. Y compara los dos brazos: si uno baja más que el otro, te lo
+dice.
+
+**"Gusano"** *(solo de lado)*. Compara el instante en que la cadera toca fondo con el instante en
 que lo hace el pecho. Si la cadera sube primero, estás subiendo por partes en vez
 de empujar con los brazos. Es el fallo más común y el más difícil de notar solo.
 
@@ -98,8 +105,8 @@ Los detalles de arquitectura, umbrales y cómo probar están en [CLAUDE.md](CLAU
 
 ## Limitaciones
 
-- Solo detecta desde una **vista lateral**. Los fallos que necesitan vista frontal
-  (codos abiertos, asimetría entre brazos) no se miden todavía.
+- Ninguna vista lo mide todo: de lado no se ve la apertura de codos, y de frente
+  la cadera queda tapada, así que no hay aviso de cadera caída ni de "gusano".
 - Los umbrales del gusano y de la fatiga están ajustados contra poses simuladas,
   no contra vídeo real, así que pueden necesitar retoque.
 - Una sola persona en el encuadre.

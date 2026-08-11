@@ -46,6 +46,17 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 .suggest { margin: 6px 0 0; font-size: 13px; color: var(--ink2); }
 .suggest b { color: var(--ink); }
 
+.segmented {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; padding: 4px;
+}
+.seg {
+  background: none; border: 0; color: var(--ink2);
+  padding: 11px 8px; border-radius: 9px; font-size: 14px; font-weight: 600;
+}
+.seg[aria-pressed="true"] { background: var(--surface2); color: var(--ink); }
+
 .steppers { display: flex; flex-direction: column; gap: 10px; }
 .stepper {
   display: grid;
@@ -260,11 +271,12 @@ th { color: var(--ink2); font-weight: 500; }
   }
   .hero { grid-area: 1 / 1; }
   .tip { grid-area: 2 / 1; }
-  .toggles { grid-area: 3 / 1; }
+  .segmented { grid-area: 3 / 1; }
+  .toggles { grid-area: 4 / 1; align-self: center; }
   .steppers { grid-area: 1 / 2 / 3 / 3; gap: 8px; }
   [data-name="setup"] > .switch { grid-area: 3 / 2; }
   #startBtn { grid-area: 4 / 2; padding: 14px; }
-  .history { grid-area: 4 / 1; align-self: center; }
+  .history { display: none; }   /* en horizontal no cabe; está en vertical */
   .step { padding: 12px 0; }
   .stepVal b { font-size: 24px; }
   .logo { max-height: 30dvh; }
