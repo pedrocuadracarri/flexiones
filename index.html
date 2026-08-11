@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0e1116">
+<meta name="theme-color" content="#0b0e13">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Contador de Flexiones</title>
@@ -11,68 +11,131 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<main>
-  <div class="stage">
-    <video id="video" playsinline muted></video>
-    <canvas id="canvas"></canvas>
+<div id="app" data-screen="setup">
 
-    <div class="hud">
-      <div class="counter"><span id="reps">0</span><small>reps</small></div>
-      <div class="chips">
-        <span class="chip" id="setChip" hidden>Serie <b>1/3</b></span>
-        <span class="chip">Codo <b id="elbowVal">–</b>°</span>
-        <span class="chip">Cuerpo <b id="bodyVal">–</b>°</span>
-        <span class="chip" id="phase">arriba</span>
+  <!-- ─── preparar ─────────────────────────────────────────────── -->
+  <section class="screen" data-name="setup">
+    <header class="hero">
+      <h1>Flexiones</h1>
+      <p id="suggest" class="suggest" hidden></p>
+    </header>
+
+    <div class="steppers">
+      <div class="stepper">
+        <button class="step" data-field="sets" data-delta="-1" aria-label="Menos series">−</button>
+        <div class="stepVal"><b id="setsVal">3</b><span>series</span></div>
+        <button class="step" data-field="sets" data-delta="1" aria-label="Más series">+</button>
+      </div>
+      <div class="stepper">
+        <button class="step" data-field="target" data-delta="-1" aria-label="Menos reps">−</button>
+        <div class="stepVal"><b id="targetVal">10</b><span>reps por serie</span></div>
+        <button class="step" data-field="target" data-delta="1" aria-label="Más reps">+</button>
+      </div>
+      <div class="stepper">
+        <button class="step" data-field="rest" data-delta="-15" aria-label="Menos descanso">−</button>
+        <div class="stepVal"><b id="restVal">60</b><span>s de descanso</span></div>
+        <button class="step" data-field="rest" data-delta="15" aria-label="Más descanso">+</button>
       </div>
     </div>
 
-    <button id="switchBtn" class="icon" title="Cambiar cámara" hidden>⟳</button>
-    <div id="status" class="status">Pulsa Iniciar y coloca el móvil <b>de lado</b>, apoyado en el suelo.</div>
-  </div>
+    <label class="switch"><input type="checkbox" id="freeMode"> Modo libre · contar sin objetivo</label>
 
-  <div class="panel">
-  <ul id="feedback" class="feedback"></ul>
+    <button id="startBtn" class="primary">Empezar</button>
 
-  <div id="clipBox" class="clip" hidden>
-    <span class="clipLabel">Peor repetición <b id="clipScore"></b></span>
-    <video id="clip" playsinline muted loop controls></video>
-  </div>
-
-  <p id="suggest" class="suggest" hidden></p>
-
-  <div class="plan">
-    <label>Series <input type="number" id="setsInput" min="1" max="10" value="3"></label>
-    <label>Reps <input type="number" id="targetInput" min="1" max="100" value="10"></label>
-    <label>Descanso <input type="number" id="restInput" min="10" max="300" step="5" value="60">s</label>
-    <label class="chk"><input type="checkbox" id="freeMode"> Libre</label>
-  </div>
-
-  <div class="controls">
-    <button id="startBtn">Iniciar</button>
-    <button id="skipBtn" class="ghost" hidden>Saltar descanso</button>
-    <button id="stopBtn" disabled>Terminar</button>
-    <button id="recalBtn" class="ghost" hidden>Recalibrar</button>
-    <label class="chk"><input type="checkbox" id="voice" checked> Voz</label>
-    <label class="chk"><input type="checkbox" id="haptics" checked> Vibrar</label>
-  </div>
-  </div>
-
-  <details class="history">
-    <summary>Progreso e historial</summary>
-    <div id="progress"></div>
-    <table id="historyTable">
-      <thead><tr><th>Fecha</th><th>Reps</th><th>Calidad</th><th>Tiempo</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <div class="histActions">
-      <button id="exportBtn" class="link">Exportar</button>
-      <button id="importBtn" class="link">Importar</button>
-      <button id="clearHistory" class="link">Borrar historial</button>
-      <input type="file" id="importFile" accept="application/json" hidden>
+    <div class="toggles">
+      <label class="switch"><input type="checkbox" id="voice" checked> Voz</label>
+      <label class="switch"><input type="checkbox" id="haptics" checked> Vibración</label>
     </div>
-  </details>
-</main>
 
+    <p class="tip">Apoya el móvil <b>de lado</b>, a ras de suelo, a 1,5–2 m. Deben verse hombro, cadera y rodilla.</p>
+
+    <details class="history">
+      <summary>Progreso e historial</summary>
+      <div id="progress"></div>
+      <table id="historyTable">
+        <thead><tr><th>Fecha</th><th>Reps</th><th>Calidad</th><th>Tiempo</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="histActions">
+        <button id="exportBtn" class="link">Exportar</button>
+        <button id="importBtn" class="link">Importar</button>
+        <button id="clearHistory" class="link">Borrar</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+    </details>
+  </section>
+
+  <!-- ─── entrenar ─────────────────────────────────────────────── -->
+  <section class="screen" data-name="workout">
+    <div class="stage">
+      <video id="video" playsinline muted></video>
+      <canvas id="canvas"></canvas>
+
+      <div class="gauge" aria-hidden="true">
+        <div class="gaugeTarget"></div>
+        <div id="gaugeFill" class="gaugeFill"></div>
+      </div>
+
+      <div class="hud">
+        <div id="setBadge" class="badge">Serie 1/3</div>
+        <div id="phaseBadge" class="badge phase">encuadre</div>
+      </div>
+
+      <div id="countBox" class="count">
+        <span id="reps">0</span>
+        <small id="repsSub">de 10</small>
+      </div>
+
+      <button id="switchBtn" class="icon" title="Cambiar cámara" hidden>⟳</button>
+      <p id="coach" class="coach">Colócate en posición de plancha</p>
+      <p id="debug" class="debug"></p>
+
+      <div id="restOverlay" class="restOverlay" hidden>
+        <div class="ringWrap">
+          <svg class="ring" viewBox="0 0 120 120">
+            <circle class="ringBg" cx="60" cy="60" r="52"/>
+            <circle id="ringFg" class="ringFg" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="ringText"><b id="restLeft">60</b><span>descanso</span></div>
+        </div>
+        <p class="restNext">Siguiente: serie <b id="restNext">2/3</b></p>
+        <button id="skipBtn" class="ghost">Saltar descanso</button>
+      </div>
+    </div>
+
+    <div class="wControls">
+      <button id="recalBtn" class="ghost">Recalibrar</button>
+      <button id="stopBtn" class="ghost danger">Terminar</button>
+    </div>
+  </section>
+
+  <!-- ─── resumen ──────────────────────────────────────────────── -->
+  <section class="screen" data-name="summary">
+    <div class="ringWrap result">
+      <svg class="ring big" viewBox="0 0 120 120">
+        <circle class="ringBg" cx="60" cy="60" r="52"/>
+        <circle id="scoreRing" class="ringFg" cx="60" cy="60" r="52"/>
+      </svg>
+      <div class="ringText"><b id="scoreVal">0</b><span>calidad</span></div>
+    </div>
+
+    <div class="totals">
+      <div class="tile"><b id="sumReps">0</b><span>flexiones</span></div>
+      <div class="tile"><b id="sumSets">0</b><span>series</span></div>
+      <div class="tile"><b id="sumTime">0s</b><span>duración</span></div>
+    </div>
+
+    <ul id="summaryList" class="feedback"></ul>
+
+    <div id="clipBox" class="clip" hidden>
+      <span class="clipLabel">Peor repetición <b id="clipScore"></b></span>
+      <video id="clip" playsinline muted loop controls></video>
+    </div>
+
+    <button id="againBtn" class="primary">Otra sesión</button>
+  </section>
+
+</div>
 <script type="module" src="app.js"></script>
 </body>
 </html>

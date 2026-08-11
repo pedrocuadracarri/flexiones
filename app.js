@@ -31,26 +31,40 @@ let restUntil = 0;
 let restCue = 0;
 
 const el = {
+  app: document.getElementById("app"),
   video: document.getElementById("video"),
   canvas: document.getElementById("canvas"),
-  status: document.getElementById("status"),
+  coach: document.getElementById("coach"),
+  debug: document.getElementById("debug"),
   reps: document.getElementById("reps"),
-  elbowVal: document.getElementById("elbowVal"),
-  bodyVal: document.getElementById("bodyVal"),
-  phase: document.getElementById("phase"),
-  feedback: document.getElementById("feedback"),
+  repsSub: document.getElementById("repsSub"),
+  countBox: document.getElementById("countBox"),
+  gaugeFill: document.getElementById("gaugeFill"),
+  setBadge: document.getElementById("setBadge"),
+  phase: document.getElementById("phaseBadge"),
   startBtn: document.getElementById("startBtn"),
   stopBtn: document.getElementById("stopBtn"),
+  againBtn: document.getElementById("againBtn"),
   switchBtn: document.getElementById("switchBtn"),
   recalBtn: document.getElementById("recalBtn"),
   skipBtn: document.getElementById("skipBtn"),
+  restOverlay: document.getElementById("restOverlay"),
+  restLeft: document.getElementById("restLeft"),
+  restNext: document.getElementById("restNext"),
+  ringFg: document.getElementById("ringFg"),
+  scoreRing: document.getElementById("scoreRing"),
+  scoreVal: document.getElementById("scoreVal"),
+  sumReps: document.getElementById("sumReps"),
+  sumSets: document.getElementById("sumSets"),
+  sumTime: document.getElementById("sumTime"),
+  feedback: document.getElementById("summaryList"),
   clipBox: document.getElementById("clipBox"),
   clip: document.getElementById("clip"),
   clipScore: document.getElementById("clipScore"),
-  setChip: document.getElementById("setChip"),
-  setsInput: document.getElementById("setsInput"),
-  targetInput: document.getElementById("targetInput"),
-  restInput: document.getElementById("restInput"),
+  steppers: document.querySelector(".steppers"),
+  setsVal: document.getElementById("setsVal"),
+  targetVal: document.getElementById("targetVal"),
+  restVal: document.getElementById("restVal"),
   freeMode: document.getElementById("freeMode"),
   voice: document.getElementById("voice"),
   haptics: document.getElementById("haptics"),
@@ -177,14 +191,14 @@ function runCalibration(lm, side, elbow, body) {
   }
   if (elbow > 130 && body) cal.samples.push([elbow, body.raw]);
   if (left > 0) {
-    setStatus(`Calibrando… ${left.toFixed(1)} s. Quieto en posición alta.`);
+    setCoach(`Calibrando… ${left.toFixed(1)} s. Quieto, brazos estirados.`, "info");
     el.phase.textContent = "calibrando";
     return;
   }
   if (cal.samples.length < 15) {            // pocas muestras válidas
     cal.startedAt = performance.now();
     cal.samples = [];
-    setStatus("Estira los brazos del todo y repetimos la calibración.");
+    setCoach("Estira los brazos del todo y repetimos la calibración.", "warn");
     return;
   }
 
@@ -197,8 +211,9 @@ function runCalibration(lm, side, elbow, body) {
   smoothElbow = cal.upElbow;
   rep.phase = "up";
   resetRep();
-  showFeedback([["good", `Calibrado: extensión ${Math.round(cal.upElbow)}°, línea neutra ${Math.round(cal.neutralBody)}°. ¡Empieza!`]]);
+  setCoach("Listo. ¡Empieza a bajar!", "good");
   speak("Listo, empieza");
+  buzz(400);
 }
 
 // --- lógica de repeticiones -------------------------------------------
@@ -226,20 +241,20 @@ function processFrame(lm) {
 
   if (rawElbow !== null) {
     smoothElbow = smoothElbow * 0.6 + rawElbow * 0.4;
-    el.elbowVal.textContent = Math.round(smoothElbow);
+    updateGauge();
   }
-  if (body) el.bodyVal.textContent = Math.round(body.raw);
+  setDebug(`codo ${Math.round(smoothElbow)}° · cuerpo ${body ? Math.round(body.raw) : "–"}° · ${Math.round(fps)} fps`);
 
   if (stage === "framing") {
     const problem = framingProblem(lm, side);
     if (problem) {
-      setStatus(problem);
+      setCoach(problem, "warn");
       el.phase.textContent = "encuadre";
       framedSince = 0;
       return;
     }
     if (!framedSince) framedSince = performance.now();
-    setStatus("Posición correcta. Mantente quieto…");
+    setCoach("Posición correcta. Mantente quieto…", "info");
     if (performance.now() - framedSince > 800) startCalibration();
     return;
   }
@@ -250,7 +265,7 @@ function processFrame(lm) {
   }
 
   if (rawElbow === null) {
-    setStatus("No se ve bien el brazo. Ajusta la cámara.");
+    setCoach("No se ve bien el brazo. Ajusta la cámara.", "warn");
     return;
   }
 
@@ -294,7 +309,7 @@ function processFrame(lm) {
     resetRep();
   }
 
-  setStatus(`Fase: ${rep.phase === "down" ? "abajo" : "arriba"} · codo ${Math.round(smoothElbow)}° · ${Math.round(fps)} fps`);
+  el.phase.textContent = rep.phase === "down" ? "bajando" : "arriba";
 }
 
 function completeRep() {
@@ -350,13 +365,15 @@ function completeRep() {
   if (fatigue) issues.push(["warn", fatigue]);
 
   const spoken = plan.free ? session.reps : setReps;
+  pulseCount();
   if (issues.length === 0) {
-    showFeedback([["good", `Rep ${session.reps}: técnica correcta (${Math.round(rep.minElbow)}°).`]]);
+    setCoach(`Rep ${session.reps}: técnica correcta (${Math.round(rep.minElbow)}°)`, "good");
     speak(String(spoken));
     buzz(40);
   } else {
-    showFeedback(issues);
-    speak(`${spoken}. ${issues[0][1]}`);
+    const [kind, msg] = issues[0];
+    setCoach(msg, kind);
+    speak(`${spoken}. ${msg}`);
     buzz([30, 70, 30]);
   }
 
@@ -441,8 +458,22 @@ function resetClips() {
 
 function updateCounter() {
   el.reps.textContent = plan.free ? session.reps : setReps;
-  el.setChip.hidden = plan.free;
-  el.setChip.querySelector("b").textContent = `${currentSet}/${plan.sets} · ${plan.target}`;
+  el.repsSub.textContent = plan.free ? "repeticiones" : `de ${plan.target}`;
+  el.setBadge.textContent = plan.free ? "Modo libre" : `Serie ${currentSet}/${plan.sets}`;
+}
+
+// El medidor se llena según lo cerca que estés de la profundidad objetivo.
+// Ver una barra llenarse es más útil que leer un ángulo mientras entrenas.
+function updateGauge() {
+  const rango = Math.max(20, cal.upElbow - GOOD_DEPTH);
+  const p = (cal.upElbow - smoothElbow) / rango;
+  el.gaugeFill.style.height = `${Math.max(0, Math.min(1, p)) * 100}%`;
+  el.gaugeFill.classList.toggle("deep", p >= 1);
+}
+
+function pulseCount() {
+  el.countBox.classList.add("pulse");
+  setTimeout(() => el.countBox.classList.remove("pulse"), 140);
 }
 
 function endSet() {
@@ -454,18 +485,22 @@ function endSet() {
   stage = "resting";
   restUntil = performance.now() + plan.rest * 1000;
   restCue = 0;
-  el.skipBtn.hidden = false;
+  el.restNext.textContent = `${currentSet + 1}/${plan.sets}`;
+  el.restOverlay.hidden = false;
   el.phase.textContent = "descanso";
   speak(`Serie ${currentSet} completada. Descansa ${plan.rest} segundos`);
   buzz([200, 100, 200]);
 }
 
+const RING = 2 * Math.PI * 52;
+
 function tickRest() {
-  const left = Math.ceil((restUntil - performance.now()) / 1000);
+  const msLeft = restUntil - performance.now();
+  const left = Math.ceil(msLeft / 1000);
   if (left <= 0) return startNextSet();
 
-  el.reps.textContent = left;
-  setStatus(`Descanso · serie ${currentSet + 1} de ${plan.sets} en ${left} s`);
+  el.restLeft.textContent = left;
+  el.ringFg.style.strokeDashoffset = RING * (1 - msLeft / (plan.rest * 1000));
   if (restCue !== left && (left === 10 || left <= 3)) {
     restCue = left;
     speak(left === 10 ? "Diez segundos" : String(left));
@@ -478,13 +513,14 @@ function startNextSet() {
   setLog = [];
   fatigueWarned = false;
   restUntil = 0;
-  el.skipBtn.hidden = true;
+  el.restOverlay.hidden = true;
   stage = "counting";
   rep.phase = "up";
   smoothElbow = cal.upElbow;
   resetRep();
   updateCounter();
   el.phase.textContent = "arriba";
+  setCoach(`Serie ${currentSet}. ¡Vamos!`, "good");
   speak(`Serie ${currentSet}. Vamos`);
   buzz(400);
 }
@@ -499,8 +535,18 @@ function showFeedback(items) {
   }
 }
 
-function setStatus(text) {
-  el.status.textContent = text;
+// Una sola línea de consejo, visible y con color según la gravedad.
+function setCoach(text, kind = "info") {
+  el.coach.textContent = text;
+  el.coach.className = `coach ${kind}`;
+}
+
+function setDebug(text) {
+  el.debug.textContent = text;
+}
+
+function showScreen(name) {
+  el.app.dataset.screen = name;
 }
 
 // Aviso táctil: en un gimnasio con ruido la voz no llega, la vibración sí.
@@ -566,7 +612,7 @@ function loop() {
       if (stage === "resting") tickRest();
       else if (lm) processFrame(lm);
       else {
-        setStatus("No te detecto. Colócate dentro del encuadre.");
+        setCoach("No te detecto. Colócate dentro del encuadre.", "warn");
         framedSince = 0;
       }
     }
@@ -611,7 +657,7 @@ window.addEventListener("orientationchange", () => setTimeout(syncVideoSize, 300
 async function switchCamera() {
   facingMode = facingMode === "user" ? "environment" : "user";
   localStorage.setItem("flexiones.facing", facingMode);
-  try { await openCamera(); } catch (err) { setStatus(`Error de cámara: ${err.message}`); }
+  try { await openCamera(); } catch (err) { setCoach(`Error de cámara: ${err.message}`, "bad"); }
 }
 
 async function requestWakeLock() {
@@ -626,7 +672,7 @@ document.addEventListener("visibilitychange", () => {
 
 async function start() {
   el.startBtn.disabled = true;
-  setStatus("Cargando modelo…");
+  el.startBtn.textContent = "Cargando…";
   try {
     if (!landmarker) {
       const vision = await FilesetResolver.forVisionTasks(
@@ -642,7 +688,7 @@ async function start() {
       });
     }
 
-    setStatus("Pidiendo cámara…");
+    setCoach("Pidiendo cámara…", "info");
     await openCamera();
     await requestWakeLock();
 
@@ -658,8 +704,8 @@ async function start() {
     resetClips();
     canvasStream = el.canvas.captureStream?.(30) || null;
     updateCounter();
-    setPlanEnabled(false);
     el.feedback.innerHTML = "";
+    el.restOverlay.hidden = true;
     resetRep();
     rep.phase = "up";
     smoothElbow = 180;
@@ -667,23 +713,21 @@ async function start() {
     framedSince = 0;
 
     running = true;
-    el.stopBtn.disabled = false;
-    el.recalBtn.hidden = false;
-    setStatus("Ponte en posición de plancha, de lado a la cámara.");
+    showScreen("workout");
+    setCoach("Ponte en posición de plancha, de lado a la cámara.", "info");
     loop();
   } catch (err) {
-    setStatus(`Error: ${err.message}`);
+    setCoach(`No pude arrancar: ${err.message}`, "bad");
+    showScreen("setup");
+  } finally {
     el.startBtn.disabled = false;
+    el.startBtn.textContent = "Empezar";
   }
 }
 
 function stop() {
   running = false;
-  el.stopBtn.disabled = true;
-  el.startBtn.disabled = false;
-  el.recalBtn.hidden = true;
-  el.skipBtn.hidden = true;
-  setPlanEnabled(true);
+  el.restOverlay.hidden = true;
   if (recorder) { try { recorder.stop(); } catch { /* ya parado */ } recorder = null; }
   canvasStream?.getTracks().forEach(t => t.stop());
   canvasStream = null;
@@ -693,7 +737,7 @@ function stop() {
   wakeLock = null;
 
   if (session.reps === 0) {
-    setStatus("Sesión terminada sin repeticiones.");
+    showScreen("setup");
     return;
   }
 
@@ -701,15 +745,22 @@ function stop() {
   const duration = Math.round((Date.now() - session.startedAt) / 1000);
   const top = Object.entries(session.issues).sort((a, b) => b[1] - a[1]).slice(0, 2);
 
-  const series = plan.free ? "" : ` · ${currentSet} de ${plan.sets} series`;
-  const summary = [["good", `Sesión: ${session.reps} flexiones${series} · calidad media ${avg}/100 · ${duration}s`]];
+  el.scoreVal.textContent = avg;
+  el.scoreRing.style.strokeDashoffset = RING * (1 - avg / 100);
+  el.scoreRing.style.stroke = avg >= 80 ? "var(--good)" : avg >= 60 ? "var(--warn)" : "var(--bad)";
+  el.sumReps.textContent = session.reps;
+  el.sumSets.textContent = plan.free ? "–" : `${currentSet}/${plan.sets}`;
+  el.sumTime.textContent = duration >= 60 ? `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, "0")}` : `${duration}s`;
 
+  const summary = [];
   if (session.depths.length >= 6) {
     const drop = mean(session.depths.slice(-3)) - mean(session.depths.slice(0, 3));
     if (drop > 6) summary.push(["warn", `Las últimas reps bajaron ${Math.round(drop)}° menos que las primeras: la fatiga te quitó recorrido.`]);
   }
   for (const [msg, n] of top) summary.push(["warn", `${n} reps: ${msg}`]);
+  if (!summary.length) summary.push(["good", "Sin fallos repetidos. Buena sesión."]);
   showFeedback(summary);
+  showScreen("summary");
   speak(`Sesión terminada. ${session.reps} flexiones. Calidad ${avg} sobre 100.`);
 
   saveSession({
@@ -748,10 +799,10 @@ function suggestPlan() {
   use.className = "link";
   use.textContent = "usar";
   use.onclick = () => {
-    el.setsInput.value = sets;
-    el.targetInput.value = target;
-    el.freeMode.checked = false;
-    readPlan();
+    plan.sets = sets;
+    plan.target = target;
+    plan.free = false;
+    savePlan();
   };
   el.suggest.appendChild(use);
 }
@@ -879,31 +930,37 @@ function renderProgress(list) {
 
 const PLAN_STORE = "flexiones.plan";
 
-function readPlan() {
-  plan.sets = Math.max(1, +el.setsInput.value || 3);
-  plan.target = Math.max(1, +el.targetInput.value || 10);
-  plan.rest = Math.max(10, +el.restInput.value || 60);
-  plan.free = el.freeMode.checked;
+const LIMITS = { sets: [1, 12], target: [1, 100], rest: [15, 300] };
+
+function savePlan() {
   localStorage.setItem(PLAN_STORE, JSON.stringify(plan));
+  renderPlan();
+}
+
+function renderPlan() {
+  el.setsVal.textContent = plan.sets;
+  el.targetVal.textContent = plan.target;
+  el.restVal.textContent = plan.rest;
+  el.freeMode.checked = plan.free;
+  el.steppers.classList.toggle("off", plan.free);
   updateCounter();
 }
 
 function restorePlan() {
   try { Object.assign(plan, JSON.parse(localStorage.getItem(PLAN_STORE)) || {}); } catch { /* valores por defecto */ }
-  el.setsInput.value = plan.sets;
-  el.targetInput.value = plan.target;
-  el.restInput.value = plan.rest;
-  el.freeMode.checked = plan.free;
-  updateCounter();
+  renderPlan();
 }
 
-function setPlanEnabled(on) {
-  for (const i of [el.setsInput, el.targetInput, el.restInput, el.freeMode]) i.disabled = !on;
+for (const btn of document.querySelectorAll(".step")) {
+  btn.addEventListener("click", () => {
+    const { field, delta } = btn.dataset;
+    const [min, max] = LIMITS[field];
+    plan[field] = Math.min(max, Math.max(min, plan[field] + +delta));
+    savePlan();
+    buzz(15);
+  });
 }
-
-for (const i of [el.setsInput, el.targetInput, el.restInput, el.freeMode]) {
-  i.addEventListener("change", readPlan);
-}
+el.freeMode.addEventListener("change", () => { plan.free = el.freeMode.checked; savePlan(); });
 el.skipBtn.addEventListener("click", () => { restUntil = 0; });
 el.exportBtn.addEventListener("click", exportHistory);
 el.importBtn.addEventListener("click", () => el.importFile.click());
@@ -916,10 +973,11 @@ el.importFile.addEventListener("change", e => {
 el.startBtn.addEventListener("click", start);
 el.stopBtn.addEventListener("click", stop);
 el.switchBtn.addEventListener("click", switchCamera);
+el.againBtn.addEventListener("click", () => showScreen("setup"));
 el.recalBtn.addEventListener("click", () => {
   stage = "framing";
   framedSince = 0;
-  setStatus("Recalibrando: ponte en posición de plancha.");
+  setCoach("Recalibrando: ponte en posición de plancha.", "info");
 });
 el.clearHistory.addEventListener("click", () => {
   localStorage.removeItem(STORE);

@@ -33,6 +33,13 @@ App web que cuenta flexiones con la cámara y evalúa la técnica en tiempo real
 - **Offline**: un service worker cachea la app y el modelo (~5 MB), así que después
   de la primera visita arranca al instante y funciona sin datos.
 
+## Interfaz
+
+Tres pantallas: **preparar** (plan con botones +/−, sugerencia del día, historial),
+**entrenar** (cámara a pantalla casi completa, contador gigante, medidor de
+profundidad lateral, una sola línea de consejo y overlay de descanso con anillo) y
+**resumen** (anillo de calidad, totales, fallos repetidos y clip de la peor rep).
+
 ## Uso
 
 Apoya el móvil **de lado**, a ras de suelo, a 1,5–2 m, de forma que se vean hombro,
