@@ -1,5 +1,16 @@
+// Contador de flexiones. Ver CLAUDE.md para arquitectura, umbrales y pruebas.
+//
+// Dos máquinas de estado que conviene no confundir:
+//   stage     framing → calibrating → counting ⇄ resting   (fase del entrenamiento)
+//   rep.phase up ⇄ down                                    (fase de una repetición)
+// La pantalla visible va aparte, en #app[data-screen].
+//
+// Toda la geometría trabaja en píxeles: las coordenadas normalizadas de MediaPipe
+// deforman los ángulos en vídeo no cuadrado. La conversión se hace en loop().
+
 import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 
+// Índices de los puntos de MediaPipe Pose que usamos, por lado del cuerpo
 const L = { shoulder: 11, elbow: 13, wrist: 15, hip: 23, knee: 25, ankle: 27 };
 const R = { shoulder: 12, elbow: 14, wrist: 16, hip: 24, knee: 26, ankle: 28 };
 const CONNECTIONS = [
