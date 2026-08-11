@@ -41,7 +41,8 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 /* ─── preparar ──────────────────────────────────────────────── */
 .hero { text-align: center; }
 .hero h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; }
-.logo { width: min(230px, 62%); height: auto; display: inline-block; }
+/* el alto manda: en horizontal el logo no puede comerse la pantalla */
+.logo { width: min(230px, 62%); max-height: 22dvh; height: auto; object-fit: contain; display: inline-block; }
 .suggest { margin: 6px 0 0; font-size: 13px; color: var(--ink2); }
 .suggest b { color: var(--ink); }
 
@@ -246,8 +247,28 @@ th, td { text-align: left; padding: 7px 4px; border-bottom: 1px solid var(--line
 th { color: var(--ink2); font-weight: 500; }
 .histActions { display: flex; gap: 16px; }
 
-/* ─── horizontal: cámara a la izquierda, controles a la derecha ─ */
+/* ─── horizontal ─────────────────────────────────────────────── */
 @media (orientation: landscape) and (max-height: 560px) {
+  /* preparar en dos columnas: el boton de empezar nunca debe caer bajo el pliegue */
+  #app[data-screen="setup"] [data-name="setup"] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-content: start;
+    gap: 8px 20px;
+    max-width: none;
+    min-height: 0;
+  }
+  .hero { grid-area: 1 / 1; }
+  .tip { grid-area: 2 / 1; }
+  .toggles { grid-area: 3 / 1; }
+  .steppers { grid-area: 1 / 2 / 3 / 3; gap: 8px; }
+  [data-name="setup"] > .switch { grid-area: 3 / 2; }
+  #startBtn { grid-area: 4 / 2; padding: 14px; }
+  .history { grid-area: 4 / 1; align-self: center; }
+  .step { padding: 12px 0; }
+  .stepVal b { font-size: 24px; }
+  .logo { max-height: 30dvh; }
+
   #app[data-screen="workout"] [data-name="workout"] {
     display: grid; grid-template-columns: 1fr 200px; gap: 10px;
     max-width: none; min-height: 100dvh; align-items: center;
