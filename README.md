@@ -15,8 +15,14 @@ en el navegador y **el vídeo nunca sale de tu dispositivo**.
      única vista que mide la línea del cuerpo (cadera caída y "gusano").
    - **De frente**, apuntando a tu cara, viendo los dos brazos. Aquí se miden la
      apertura de codos y la simetría entre brazos, que de lado no se aprecian.
-2. Elige series, repeticiones y descanso (o marca *Modo libre* para contar sin
-   objetivo) y pulsa **Empezar**.
+2. Elige modo y pulsa **Empezar**:
+   - **Series**: objetivo de repeticiones y descanso cronometrado entre series.
+   - **Libre**: cuenta sin objetivo, terminas tú.
+   - **Test**: hasta el fallo. Se cierra sola si dejas de repetir 12 segundos y
+     guarda tu récord aparte del historial normal.
+
+   La primera vez sale una guía con dónde poner el móvil en cada vista; luego
+   está siempre en *¿Cómo coloco el móvil?*
 3. Colócate en plancha. La app comprueba el encuadre, se calibra contigo durante
    3 segundos y avisa cuando puedes empezar.
 4. Haz la serie. Cuenta en voz alta, vibra y corrige sobre la marcha.
@@ -61,8 +67,13 @@ de empujar con los brazos. Es el fallo más común y el más difícil de notar s
 pierdes recorrido o te frenas, te avisa una vez: sabes que te quedan pocas buenas
 antes de que la técnica se rompa.
 
-**Clip de la peor repetición.** Graba cada repetición con el esqueleto dibujado
-encima y conserva la peor puntuada. Verte fallar explica más que cualquier texto.
+**Tu mejor y tu peor repetición.** Graba cada repetición con el esqueleto dibujado
+encima y al terminar te enseña las dos, una al lado de la otra. Verte fallar
+explica más que cualquier texto, y tenerlas juntas te dice en qué se diferencian.
+
+**Pausa cuando sales de la plancha.** Si te levantas —a por agua, a mirar el
+móvil— deja de contar y te lo dice, en vez de sumar repeticiones fantasma con el
+vaivén de los brazos. Al volver a la posición sigue donde estaba.
 
 ## Progreso
 

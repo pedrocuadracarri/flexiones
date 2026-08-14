@@ -43,7 +43,11 @@ const OBS_MIN_RANGE = 45;   // grados de recorrido mínimos para fiarse
 let stage = "framing"; // framing → calibrating → counting ⇄ resting
 
 // Plan de entrenamiento
-const plan = { sets: 3, target: 10, rest: 60, free: false, view: "side" };
+// mode: "sets" (series con objetivo) | "free" (contar sin más) | "test" (hasta el fallo)
+const plan = { sets: 3, target: 10, rest: 60, mode: "sets", view: "side" };
+const isSets = () => plan.mode === "sets";
+const isTest = () => plan.mode === "test";
+const TEST_IDLE_MS = 12000;   // sin repetir este rato en test = has llegado al fallo
 let currentSet = 1;
 let setReps = 0;
 let restUntil = 0;
@@ -78,15 +82,17 @@ const el = {
   sumTime: document.getElementById("sumTime"),
   feedback: document.getElementById("summaryList"),
   clipBox: document.getElementById("clipBox"),
-  clip: document.getElementById("clip"),
-  clipScore: document.getElementById("clipScore"),
   steppers: document.querySelector(".steppers"),
-  segs: [...document.querySelectorAll(".seg")],
+  segs: [...document.querySelectorAll(".seg[data-view]")],
+  modeSegs: [...document.querySelectorAll(".seg[data-mode]")],
+  modeHint: document.getElementById("modeHint"),
   tip: document.getElementById("tip"),
+  guide: document.getElementById("guide"),
+  helpBtn: document.getElementById("helpBtn"),
+  guideOk: document.getElementById("guideOk"),
   setsVal: document.getElementById("setsVal"),
   targetVal: document.getElementById("targetVal"),
   restVal: document.getElementById("restVal"),
-  freeMode: document.getElementById("freeMode"),
   voice: document.getElementById("voice"),
   haptics: document.getElementById("haptics"),
   suggest: document.getElementById("suggest"),
@@ -217,6 +223,26 @@ function framingProblem(lm, side) {
   return null;
 }
 
+// ¿Has dejado la plancha? Al levantarte a por el móvil los brazos se mueven y
+// los ángulos dan un vaivén que parecía una repetición. Se mira el torso: de
+// lado se pone vertical, y de frente deja de estar escorzado y se alarga.
+function outOfPosition(lm, side) {
+  if (isFront()) {
+    if (!visible(lm, L.hip, R.hip, L.shoulder, R.shoulder)) return false;
+    const width = Math.abs(lm[L.shoulder].x - lm[R.shoulder].x);
+    if (width < 1) return false;
+    const shY = (lm[L.shoulder].y + lm[R.shoulder].y) / 2;
+    const hipY = (lm[L.hip].y + lm[R.hip].y) / 2;
+    return Math.abs(hipY - shY) > width * 1.2;
+  }
+  if (!visible(lm, side.shoulder, side.hip)) return false;
+  const tilt = Math.abs(Math.atan2(
+    lm[side.shoulder].y - lm[side.hip].y,
+    lm[side.shoulder].x - lm[side.hip].x
+  ) * 180 / Math.PI);
+  return Math.min(tilt, 180 - tilt) > 45;
+}
+
 // Ángulo de codo: de lado, el del lado visible; de frente, la media de los dos.
 // Devuelve también cada lado por separado para juzgar simetría y apertura.
 function elbowReading(lm, side) {
@@ -281,6 +307,9 @@ function runCalibration(lm, side, elbow, body) {
   stage = "counting";
   smoothElbow = cal.upElbow;
   rep.phase = "up";
+  paused = false;
+  outSince = 0;
+  lastRepAt = performance.now();
   resetRep();
   setCoach("Listo. ¡Empieza a bajar!", "good");
   speak("Listo, empieza");
@@ -291,6 +320,9 @@ function runCalibration(lm, side, elbow, body) {
 
 let shortAttempt = 0;   // punto más bajo de un intento que no llegó a disparar
 let atTop = true;       // ¿venías de arriba? si no, no hay intento que juzgar
+let paused = false;     // fuera de la plancha: ni cuenta ni juzga
+let outSince = 0;
+let lastRepAt = 0;
 
 function trackRange(a, now) {
   if (now - obs.t > OBS_WINDOW) { obs.min = obs.max = a; obs.t = now; return; }
@@ -369,6 +401,34 @@ function processFrame(lm) {
   }
 
   const now = performance.now();
+
+  // Sales de la plancha (te levantas a por el móvil): se descarta la repetición
+  // en curso y se deja de contar hasta que vuelvas.
+  if (outOfPosition(lm, side)) {
+    if (!outSince) outSince = now;
+    if (!paused && now - outSince > 600) {   // el margen es para no parpadear el aviso
+      paused = true;
+      rep.phase = "up";
+      resetRep();
+      el.phase.textContent = "pausa";
+      setCoach("Fuera de posición: no estoy contando.", "info");
+    }
+    return;                                  // fuera de la plancha no se cuenta nunca
+  } else if (outSince) {
+    outSince = 0;
+    if (paused) {
+      paused = false;
+      smoothElbow = cal.upElbow;
+      obs.min = obs.max = cal.upElbow;   // el vaivén de levantarte no es tu recorrido
+      obs.t = 0;
+      rep.phase = "up";
+      resetRep();
+      lastRepAt = now;   // el rato fuera de posición no cuenta como fallo en el test
+      setCoach("Ya te veo otra vez. Cuando quieras.", "good");
+    }
+  }
+  if (paused) return;
+
   const hipY = visible(lm, side.hip) ? lm[side.hip].y : null;
 
   if (body) {
@@ -432,6 +492,12 @@ function processFrame(lm) {
   }
 
   el.phase.textContent = rep.phase === "down" ? "bajando" : "arriba";
+
+  // En test no hay que pulsar nada al llegar al fallo: si dejas de repetir, cierra
+  if (isTest() && session.reps > 0 && rep.phase === "up" && now - lastRepAt > TEST_IDLE_MS) {
+    speak("Test terminado");
+    stop();
+  }
 }
 
 function completeRep() {
@@ -505,7 +571,7 @@ function completeRep() {
   // lo grave primero: solo el primer aviso se dice en voz y se ve en pantalla
   issues.sort((a, b) => (a[0] === "bad" ? 0 : 1) - (b[0] === "bad" ? 0 : 1));
 
-  const spoken = plan.free ? session.reps : setReps;
+  const spoken = isSets() ? setReps : session.reps;
   pulseCount();
   if (issues.length === 0) {
     setCoach(`Rep ${session.reps}: técnica correcta (${Math.round(rep.minElbow)}°)`, "good");
@@ -518,7 +584,8 @@ function completeRep() {
     buzz([30, 70, 30]);
   }
 
-  if (!plan.free && setReps >= plan.target) endSet();
+  lastRepAt = performance.now();
+  if (isSets() && setReps >= plan.target) endSet();
 }
 
 // --- fatiga -------------------------------------------------------------
@@ -549,8 +616,21 @@ function checkFatigue() {
 let canvasStream = null;
 let recorder = null;
 let clipChunks = [];
-let worstScore = 101;
-let clipUrl = null;
+// la peor enseña qué corregir; la mejor, a qué se parece cuando lo haces bien
+const clips = {
+  worst: {
+    score: 101, url: null,
+    video: document.getElementById("clip"),
+    box: document.getElementById("worstBox"),
+    label: document.getElementById("clipScore"),
+  },
+  best: {
+    score: -1, url: null,
+    video: document.getElementById("bestClip"),
+    box: document.getElementById("bestBox"),
+    label: document.getElementById("bestScore"),
+  },
+};
 
 function clipMime() {
   return ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"]
@@ -572,35 +652,47 @@ function startClip() {
   }
 }
 
+function keepClip(slot, score, blob) {
+  if (slot.url) URL.revokeObjectURL(slot.url);
+  slot.score = score;
+  slot.url = URL.createObjectURL(blob);
+  slot.video.src = slot.url;
+  slot.label.textContent = `${score}/100`;
+  slot.box.hidden = false;
+  el.clipBox.hidden = false;
+}
+
 function saveClip(score) {
   if (!recorder) return;
   const rec = recorder;
   recorder = null;
   rec.onstop = () => {
-    if (score >= worstScore || !clipChunks.length) return;
-    worstScore = score;
-    if (clipUrl) URL.revokeObjectURL(clipUrl);
-    clipUrl = URL.createObjectURL(new Blob(clipChunks, { type: rec.mimeType }));
-    el.clip.src = clipUrl;
-    el.clipScore.textContent = `${score}/100`;
-    el.clipBox.hidden = false;
+    if (!clipChunks.length) return;
+    const blob = new Blob(clipChunks, { type: rec.mimeType });
+    if (score < clips.worst.score) keepClip(clips.worst, score, blob);
+    if (score > clips.best.score) keepClip(clips.best, score, blob);
   };
   try { rec.stop(); } catch { /* ya parado */ }
 }
 
 function resetClips() {
-  worstScore = 101;
   el.clipBox.hidden = true;
-  if (clipUrl) { URL.revokeObjectURL(clipUrl); clipUrl = null; }
-  el.clip.removeAttribute("src");
+  for (const slot of Object.values(clips)) {
+    if (slot.url) { URL.revokeObjectURL(slot.url); slot.url = null; }
+    slot.video.removeAttribute("src");
+    slot.box.hidden = true;
+  }
+  clips.worst.score = 101;
+  clips.best.score = -1;
 }
 
 // --- series y descansos ------------------------------------------------
 
 function updateCounter() {
-  el.reps.textContent = plan.free ? session.reps : setReps;
-  el.repsSub.textContent = plan.free ? "repeticiones" : `de ${plan.target}`;
-  el.setBadge.textContent = plan.free ? "Modo libre" : `Serie ${currentSet}/${plan.sets}`;
+  el.reps.textContent = isSets() ? setReps : session.reps;
+  el.repsSub.textContent = isSets() ? `de ${plan.target}` : "repeticiones";
+  el.setBadge.textContent = isSets() ? `Serie ${currentSet}/${plan.sets}`
+    : isTest() ? `Test · récord ${loadRecord()?.reps ?? "–"}` : "Modo libre";
 }
 
 // El medidor se llena según lo cerca que estés de la profundidad objetivo.
@@ -842,6 +934,7 @@ async function start() {
     setReps = 0;
     setLog = [];
     fatigueWarned = false;
+    lastRepAt = performance.now();
     resetClips();
     canvasStream = el.canvas.captureStream?.(30) || null;
     updateCounter();
@@ -890,10 +983,24 @@ function stop() {
   el.scoreRing.style.strokeDashoffset = RING * (1 - avg / 100);
   el.scoreRing.style.stroke = avg >= 80 ? "var(--good)" : avg >= 60 ? "var(--warn)" : "var(--bad)";
   el.sumReps.textContent = session.reps;
-  el.sumSets.textContent = plan.free ? "–" : `${currentSet}/${plan.sets}`;
+  el.sumSets.textContent = isSets() ? `${currentSet}/${plan.sets}` : isTest() ? "test" : "–";
   el.sumTime.textContent = duration >= 60 ? `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, "0")}` : `${duration}s`;
 
   const summary = [];
+  if (isTest()) {
+    const prev = loadRecord();
+    if (!prev || session.reps > prev.reps) {
+      saveRecord({ reps: session.reps, quality: avg, date: Date.now() });
+      summary.push(["good", prev
+        ? `¡Récord nuevo! ${session.reps} flexiones, ${session.reps - prev.reps} más que tu marca anterior.`
+        : `Primera marca: ${session.reps} flexiones. A partir de aquí, a superarla.`]);
+      speak("Récord nuevo");
+    } else if (session.reps === prev.reps) {
+      summary.push(["good", `Igualas tu récord: ${prev.reps} flexiones.`]);
+    } else {
+      summary.push(["warn", `Te quedaste a ${prev.reps - session.reps} de tu récord (${prev.reps}).`]);
+    }
+  }
   if (session.depths.length >= 6) {
     const drop = mean(session.depths.slice(-3)) - mean(session.depths.slice(0, 3));
     if (drop > 6) summary.push(["warn", `Las últimas reps bajaron ${Math.round(drop)}° menos que las primeras: la fatiga te quitó recorrido.`]);
@@ -906,13 +1013,23 @@ function stop() {
 
   saveSession({
     date: Date.now(), reps: session.reps, quality: avg, duration,
-    sets: plan.free ? null : currentSet, target: plan.free ? null : plan.target,
+    sets: isSets() ? currentSet : null, target: isSets() ? plan.target : null,
+    mode: plan.mode,
   });
 }
 
 // --- historial ---------------------------------------------------------
 
 const STORE = "flexiones.history";
+const RECORD_STORE = "flexiones.record";
+
+function loadRecord() {
+  try { return JSON.parse(localStorage.getItem(RECORD_STORE)) || null; } catch { return null; }
+}
+
+function saveRecord(r) {
+  localStorage.setItem(RECORD_STORE, JSON.stringify(r));
+}
 
 function loadHistory() {
   try { return JSON.parse(localStorage.getItem(STORE)) || []; } catch { return []; }
@@ -942,7 +1059,7 @@ function suggestPlan() {
   use.onclick = () => {
     plan.sets = sets;
     plan.target = target;
-    plan.free = false;
+    plan.mode = "sets";
     savePlan();
   };
   el.suggest.appendChild(use);
@@ -1083,19 +1200,30 @@ const TIPS = {
   front: "Pon el móvil <b>delante de ti</b>, a ras de suelo, apuntando a tu cara. Deben verse los dos brazos. Mide profundidad, apertura de codos y simetría; la cadera no se ve desde aquí.",
 };
 
+const MODE_HINTS = {
+  sets: "Series con objetivo y descanso cronometrado entre ellas.",
+  free: "Cuenta sin objetivo. Terminas tú cuando quieras.",
+  test: "Hasta el fallo, sin objetivo. Se cierra sola si dejas de repetir 12 s.",
+};
+
 function renderPlan() {
   el.setsVal.textContent = plan.sets;
   el.targetVal.textContent = plan.target;
   el.restVal.textContent = plan.rest;
-  el.freeMode.checked = plan.free;
-  el.steppers.classList.toggle("off", plan.free);
+  el.steppers.classList.toggle("off", !isSets());
   for (const b of el.segs) b.setAttribute("aria-pressed", String(b.dataset.view === plan.view));
+  for (const b of el.modeSegs) b.setAttribute("aria-pressed", String(b.dataset.mode === plan.mode));
   el.tip.innerHTML = TIPS[plan.view] || TIPS.side;
+  const rec = loadRecord();
+  el.modeHint.innerHTML = (MODE_HINTS[plan.mode] || "")
+    + (isTest() && rec ? ` Tu récord: <b>${rec.reps} reps</b>.` : "");
   updateCounter();
 }
 
 function restorePlan() {
   try { Object.assign(plan, JSON.parse(localStorage.getItem(PLAN_STORE)) || {}); } catch { /* valores por defecto */ }
+  if (!plan.mode) plan.mode = plan.free ? "free" : "sets";   // planes guardados antes de los modos
+  delete plan.free;
   renderPlan();
 }
 
@@ -1108,9 +1236,11 @@ for (const btn of document.querySelectorAll(".step")) {
     buzz(15);
   });
 }
-el.freeMode.addEventListener("change", () => { plan.free = el.freeMode.checked; savePlan(); });
 for (const b of el.segs) {
   b.addEventListener("click", () => { plan.view = b.dataset.view; savePlan(); buzz(15); });
+}
+for (const b of el.modeSegs) {
+  b.addEventListener("click", () => { plan.mode = b.dataset.mode; savePlan(); buzz(15); });
 }
 el.skipBtn.addEventListener("click", () => { restUntil = 0; });
 el.exportBtn.addEventListener("click", exportHistory);
@@ -1135,8 +1265,20 @@ el.clearHistory.addEventListener("click", () => {
   renderHistory();
 });
 
+// La guía se enseña sola la primera vez: colocar mal el móvil es el fallo que
+// más se paga, y no se descubre solo.
+const GUIDE_STORE = "flexiones.guiaVista";
+
+el.helpBtn.addEventListener("click", () => el.guide.showModal());
+el.guideOk.addEventListener("click", () => {
+  el.guide.close();
+  localStorage.setItem(GUIDE_STORE, "1");
+});
+
 restorePlan();
 renderHistory();
+
+if (!localStorage.getItem(GUIDE_STORE)) el.guide.showModal();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));

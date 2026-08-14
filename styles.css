@@ -56,6 +56,9 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   padding: 11px 8px; border-radius: 9px; font-size: 14px; font-weight: 600;
 }
 .seg[aria-pressed="true"] { background: var(--surface2); color: var(--ink); }
+.segmented.modes { grid-template-columns: repeat(3, 1fr); }
+.modeHint { margin: -6px 0 0; font-size: 12px; color: var(--ink2); }
+.modeHint b { color: var(--ink); }
 
 .steppers { display: flex; flex-direction: column; gap: 10px; }
 .stepper {
@@ -236,11 +239,40 @@ button.link { background: none; border: 0; color: var(--ink2); text-decoration: 
 .feedback li.warn { border-color: var(--warn); }
 .feedback li.bad { border-color: var(--bad); }
 
-.clip { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.clips { display: flex; gap: 10px; width: 100%; }
+.clip { display: flex; flex-direction: column; gap: 6px; flex: 1; margin: 0; min-width: 0; }
 .clipLabel { font-size: 12px; color: var(--ink2); }
 .clipLabel b { color: var(--bad); }
-#clip { width: 100%; max-width: 240px; border-radius: 12px; background: #000; }
+.clipLabel.good b { color: var(--good); }
+.clip video { width: 100%; border-radius: 12px; background: #000; }
 [data-name="summary"] .primary { width: 100%; margin-top: auto; }
+
+/* ─── guía de colocación ────────────────────────────────────── */
+.guide {
+  width: min(440px, calc(100vw - 24px));
+  max-height: 88dvh;
+  overflow-y: auto;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  margin: auto;
+}
+.guide::backdrop { background: rgba(5, 8, 13, .8); }
+.guide h2 { margin: 0 0 14px; font-size: 19px; }
+.guideCase { margin: 0 0 16px; }
+.guideCase svg { width: 100%; height: auto; background: var(--bg); border-radius: 12px; }
+.guideCase figcaption { font-size: 13px; line-height: 1.45; color: var(--ink2); margin-top: 8px; }
+.guideCase figcaption b, .guideNote b { color: var(--ink); }
+.gFloor { stroke: var(--line); stroke-width: 3; stroke-linecap: round; }
+.gPhone { fill: var(--info); }
+.gCone { fill: var(--info); opacity: .16; }
+.gBody { stroke: var(--good); stroke-width: 5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+circle.gBody { fill: var(--good); stroke: none; }
+.gLabel { fill: var(--ink2); font-size: 10px; text-anchor: middle; font-family: system-ui, sans-serif; }
+.guideNote { font-size: 13px; line-height: 1.45; color: var(--ink2); margin: 0 0 16px; }
+.guide .primary { width: 100%; }
 
 /* ─── progreso e historial ──────────────────────────────────── */
 .history { font-size: 14px; }
@@ -271,15 +303,17 @@ th { color: var(--ink2); font-weight: 500; }
   }
   .hero { grid-area: 1 / 1; }
   .tip { grid-area: 2 / 1; }
-  .segmented { grid-area: 3 / 1; }
-  .toggles { grid-area: 4 / 1; align-self: center; }
-  .steppers { grid-area: 1 / 2 / 3 / 3; gap: 8px; }
-  [data-name="setup"] > .switch { grid-area: 3 / 2; }
-  #startBtn { grid-area: 4 / 2; padding: 14px; }
-  .history { display: none; }   /* en horizontal no cabe; está en vertical */
-  .step { padding: 12px 0; }
-  .stepVal b { font-size: 24px; }
-  .logo { max-height: 30dvh; }
+  #helpBtn { grid-area: 3 / 1; justify-self: start; }
+  .segmented:not(.modes) { grid-area: 4 / 1; }
+  .toggles { grid-area: 5 / 1; align-self: center; }
+  .steppers { grid-area: 1 / 2 / 4 / 3; gap: 8px; }
+  .segmented.modes { grid-area: 4 / 2; }
+  #startBtn { grid-area: 5 / 2; padding: 14px; }
+  .modeHint, .history { display: none; }   /* en horizontal no caben; están en vertical */
+  .step { padding: 8px 0; }
+  .stepVal b { font-size: 21px; }
+  .stepVal span { font-size: 10px; }
+  .logo { max-height: 22dvh; }
 
   #app[data-screen="workout"] [data-name="workout"] {
     display: grid; grid-template-columns: 1fr 200px; gap: 10px;

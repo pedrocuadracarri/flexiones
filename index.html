@@ -13,6 +13,45 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<dialog id="guide" class="guide">
+  <h2>Dónde poner el móvil</h2>
+
+  <figure class="guideCase">
+    <svg viewBox="0 0 300 120" role="img" aria-label="Móvil de lado, a ras de suelo, viendo el cuerpo de perfil">
+      <line class="gFloor" x1="8" y1="100" x2="292" y2="100"/>
+      <!-- móvil apoyado de canto -->
+      <rect class="gPhone" x="16" y="62" width="22" height="38" rx="4"/>
+      <path class="gCone" d="M40 66 L120 44 L120 96 Z"/>
+      <!-- figura en plancha, de perfil -->
+      <circle class="gBody" cx="238" cy="62" r="8"/>
+      <path class="gBody" d="M230 66 L170 78 L140 92"/>
+      <path class="gBody" d="M228 68 L232 98"/>
+      <path class="gBody" d="M170 78 L168 98"/>
+      <text class="gLabel" x="150" y="116">1,5 – 2 m · de perfil</text>
+    </svg>
+    <figcaption><b>De lado.</b> El móvil de canto en el suelo, apuntando a tu costado. Tienen que entrar hombro, cadera y rodilla.</figcaption>
+  </figure>
+
+  <figure class="guideCase">
+    <svg viewBox="0 0 300 120" role="img" aria-label="Móvil de frente, a ras de suelo, apuntando a la cara">
+      <line class="gFloor" x1="8" y1="100" x2="292" y2="100"/>
+      <rect class="gPhone" x="16" y="62" width="22" height="38" rx="4"/>
+      <path class="gCone" d="M40 60 L130 30 L130 100 Z"/>
+      <!-- figura en plancha vista de frente: cabeza, hombros y brazos -->
+      <circle class="gBody" cx="150" cy="56" r="9"/>
+      <path class="gBody" d="M132 70 L168 70"/>
+      <path class="gBody" d="M132 70 L120 96"/>
+      <path class="gBody" d="M168 70 L180 96"/>
+      <path class="gBody" d="M150 66 L150 96"/>
+      <text class="gLabel" x="150" y="116">apuntando a tu cara</text>
+    </svg>
+    <figcaption><b>De frente.</b> El móvil delante, mirándote a la cara. Tienen que verse los dos brazos enteros.</figcaption>
+  </figure>
+
+  <p class="guideNote">En las dos, el móvil va <b>en el suelo</b>: cuanto más bajo, mejor mide los ángulos. Al empezar, quédate quieto en plancha 3 segundos: la app se calibra contigo.</p>
+  <button id="guideOk" class="primary">Entendido</button>
+</dialog>
+
 <div id="app" data-screen="setup">
 
   <!-- ─── preparar ─────────────────────────────────────────────── -->
@@ -45,7 +84,12 @@
       </div>
     </div>
 
-    <label class="switch"><input type="checkbox" id="freeMode"> Modo libre · contar sin objetivo</label>
+    <div class="segmented modes" role="group" aria-label="Modo de entrenamiento">
+      <button class="seg" data-mode="sets">Series</button>
+      <button class="seg" data-mode="free">Libre</button>
+      <button class="seg" data-mode="test">Test</button>
+    </div>
+    <p class="modeHint" id="modeHint"></p>
 
     <button id="startBtn" class="primary">Empezar</button>
 
@@ -55,6 +99,7 @@
     </div>
 
     <p class="tip" id="tip"></p>
+    <button id="helpBtn" class="link">¿Cómo coloco el móvil?</button>
 
     <details class="history">
       <summary>Progreso e historial</summary>
@@ -134,9 +179,15 @@
 
     <ul id="summaryList" class="feedback"></ul>
 
-    <div id="clipBox" class="clip" hidden>
-      <span class="clipLabel">Peor repetición <b id="clipScore"></b></span>
-      <video id="clip" playsinline muted loop controls></video>
+    <div id="clipBox" class="clips" hidden>
+      <figure class="clip" id="bestBox" hidden>
+        <figcaption class="clipLabel good">Mejor <b id="bestScore"></b></figcaption>
+        <video id="bestClip" playsinline muted loop controls></video>
+      </figure>
+      <figure class="clip" id="worstBox" hidden>
+        <figcaption class="clipLabel">Peor <b id="clipScore"></b></figcaption>
+        <video id="clip" playsinline muted loop controls></video>
+      </figure>
     </div>
 
     <button id="againBtn" class="primary">Otra sesión</button>

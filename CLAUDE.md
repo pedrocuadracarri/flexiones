@@ -60,6 +60,14 @@ Todo lo que dependa de la vista pasa por `isFront()`. Si añades una detección,
 decide en cuál de las dos tiene sentido antes de escribirla: medir la cadera de
 frente da avisos inventados.
 
+## Tres modos
+
+`plan.mode` vale `"sets"`, `"free"` o `"test"`. Solo `sets` usa objetivo,
+descansos y `endSet()`. `test` no necesita que pulses nada al llegar al fallo:
+si pasas `TEST_IDLE_MS` (12 s) sin repetir, `processFrame` llama a `stop()`, y
+el resultado se compara contra `flexiones.record`. Usa `isSets()` / `isTest()`,
+nunca compares la cadena a mano.
+
 ## Máquinas de estado
 
 Dos, y conviene no confundirlas:
@@ -67,6 +75,9 @@ Dos, y conviene no confundirlas:
 - **`stage`** (`framing` → `calibrating` → `counting` ⇄ `resting`): en qué punto
   del entrenamiento estás. Lo consulta `processFrame` y el bucle.
 - **`rep.phase`** (`up` ⇄ `down`): dónde estás dentro de una repetición.
+
+Aparte hay una **pausa** (`paused`), que no es un `stage`: al salir de la plancha
+se deja de contar sin perder la calibración ni la serie en curso.
 
 La pantalla visible es aparte: `#app[data-screen]` con valores `setup`, `workout`
 y `summary`, y se cambia solo con `showScreen(...)`.
@@ -91,14 +102,23 @@ bucle. Si lo llamas suelto (por ejemplo en un test), avanza de serie de más.
    `cal.neutralBody` se miden en 3 s de plancha; de ahí salen `cal.upAngle` y
    `cal.downAngle`, y la desviación de cadera se mide contra `cal.neutralBody`.
    Comparar contra 180° teóricos genera falsos avisos.
-4. **El clip se graba por repetición, no como buffer continuo.** Un trozo suelto
+4. **Fuera de la plancha no se cuenta, y el margen no es una excepción.**
+   `outOfPosition()` detecta que te has levantado (de lado el torso se pone
+   vertical; de frente deja de estar escorzado y se alarga). En cuanto da
+   positivo, `processFrame` **retorna**: el margen de 600 ms solo decide cuándo
+   se anuncia la pausa. Contar durante ese margen era justo el bug de las reps
+   fantasma al ir a por el móvil. Al volver se reinicia `obs` —el vaivén de
+   levantarte no es tu recorrido— y `lastRepAt`, o el test se cerraría solo.
+5. **El clip se graba por repetición, no como buffer continuo.** Un trozo suelto
    de un `MediaRecorder` no es reproducible (le faltan las cabeceras). Se arranca
    al empezar la bajada y se para al cerrar la rep.
-5. **`el.canvas.captureStream()` graba el canvas, no la cámara**, y por eso el
-   clip lleva el esqueleto dibujado. Si grabaras `stream` perderías eso.
-6. **El service worker es red-primero para los archivos propios** y caché-primero
+6. **`el.canvas.captureStream()` graba el canvas, no la cámara**, y por eso el
+   clip lleva el esqueleto dibujado. Si grabaras `stream` perderías eso. El mismo
+   blob puede acabar en los dos huecos de `clips` (mejor y peor) si solo hiciste
+   una repetición.
+7. **El service worker es red-primero para los archivos propios** y caché-primero
    para el CDN (URLs con versión). Al revés servirías una versión vieja de la app.
-7. **Especificidad CSS**: la regla que muestra cada pantalla es
+8. **Especificidad CSS**: la regla que muestra cada pantalla es
    `#app[data-screen="x"] [data-name="x"]`. Cualquier `display` que quieras
    imponer después (por ejemplo el `grid` de horizontal) necesita al menos esa
    especificidad o no se aplica.
@@ -123,6 +143,9 @@ Todos en `app.js`, arriba o en la función que los usa.
 | En lateral, rechaza vista frontal | separación de hombros > 55% del torso | `framingProblem` |
 | En frontal, rechaza vista lateral | separación de hombros < 35% del brazo | `framingProblem` |
 | No es plancha (rechaza, solo lateral) | inclinación del cuerpo > 40° | `framingProblem` |
+| Fuera de plancha | torso a > 45° (lateral) o cadera a > 1,2 anchos de hombro (frontal) | `outOfPosition` |
+| Aviso de pausa | 600 ms fuera de posición | `processFrame` |
+| Fin automático del test | 12 s sin repetir | `TEST_IDLE_MS` |
 | Confianza mínima de un punto | 0.6 | `MIN_VISIBILITY` |
 | Inferencia | 24 fps | `MIN_FRAME_MS` |
 | Suavizado del ángulo de codo | EMA 0.6 / 0.4 | `processFrame` |
@@ -135,8 +158,11 @@ sintéticas, no contra vídeo real.
 `localStorage`, siempre con prefijo `flexiones.`:
 
 - `flexiones.history` — hasta 50 sesiones `{date, reps, quality, duration, sets, target}`
-- `flexiones.plan` — `{sets, target, rest, free}`
+- `flexiones.plan` — `{sets, target, rest, mode, view}` (los planes viejos traían
+  `free: bool`; `restorePlan()` los migra a `mode`)
+- `flexiones.record` — mejor marca del modo test `{reps, quality, date}`
 - `flexiones.facing` — `"user"` o `"environment"`
+- `flexiones.guiaVista` — `"1"` cuando ya se ha visto la guía de colocación
 
 Cachés del service worker: `flexiones-shell-v1` y `flexiones-deps-v1`.
 
