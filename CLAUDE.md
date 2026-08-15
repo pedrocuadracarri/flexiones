@@ -109,16 +109,24 @@ bucle. Si lo llamas suelto (por ejemplo en un test), avanza de serie de más.
    se anuncia la pausa. Contar durante ese margen era justo el bug de las reps
    fantasma al ir a por el móvil. Al volver se reinicia `obs` —el vaivén de
    levantarte no es tu recorrido— y `lastRepAt`, o el test se cerraría solo.
-5. **El clip se graba por repetición, no como buffer continuo.** Un trozo suelto
+5. **La voz se pisa a sí misma si no se ordena.** `speak(texto, urgent)`: sin
+   `urgent` el aviso se descarta si el motor ya está hablando, en vez de cortar
+   la frase a medias —cortar es justo lo que se percibe como «no ha sonado»—.
+   Solo el número de repetición y los cambios de estado son urgentes. Además, en
+   voz se dice `shortPhrase(msg)`, no el mensaje entero: una frase larga no cabe
+   entre dos repeticiones. Y `primeSpeech()` **tiene que llamarse dentro del
+   gesto del usuario** (primera línea de `start()`), o en móvil el motor no
+   arranca y se pierde el primer aviso.
+6. **El clip se graba por repetición, no como buffer continuo.** Un trozo suelto
    de un `MediaRecorder` no es reproducible (le faltan las cabeceras). Se arranca
    al empezar la bajada y se para al cerrar la rep.
-6. **`el.canvas.captureStream()` graba el canvas, no la cámara**, y por eso el
+7. **`el.canvas.captureStream()` graba el canvas, no la cámara**, y por eso el
    clip lleva el esqueleto dibujado. Si grabaras `stream` perderías eso. El mismo
    blob puede acabar en los dos huecos de `clips` (mejor y peor) si solo hiciste
    una repetición.
-7. **El service worker es red-primero para los archivos propios** y caché-primero
+8. **El service worker es red-primero para los archivos propios** y caché-primero
    para el CDN (URLs con versión). Al revés servirías una versión vieja de la app.
-8. **Especificidad CSS**: la regla que muestra cada pantalla es
+9. **Especificidad CSS**: la regla que muestra cada pantalla es
    `#app[data-screen="x"] [data-name="x"]`. Cualquier `display` que quieras
    imponer después (por ejemplo el `grid` de horizontal) necesita al menos esa
    especificidad o no se aplica.

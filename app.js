@@ -274,7 +274,7 @@ function startCalibration() {
   stage = "calibrating";
   cal.samples = [];
   cal.startedAt = performance.now();
-  speak("Quieto, calibrando");
+  speak("Quieto, calibrando", true);
 }
 
 function runCalibration(lm, side, elbow, body) {
@@ -312,7 +312,7 @@ function runCalibration(lm, side, elbow, body) {
   lastRepAt = performance.now();
   resetRep();
   setCoach("Listo. ¡Empieza a bajar!", "good");
-  speak("Listo, empieza");
+  speak("Listo, empieza", true);
   buzz(400);
 }
 
@@ -495,7 +495,7 @@ function processFrame(lm) {
 
   // En test no hay que pulsar nada al llegar al fallo: si dejas de repetir, cierra
   if (isTest() && session.reps > 0 && rep.phase === "up" && now - lastRepAt > TEST_IDLE_MS) {
-    speak("Test terminado");
+    speak("Test terminado", true);
     stop();
   }
 }
@@ -575,12 +575,12 @@ function completeRep() {
   pulseCount();
   if (issues.length === 0) {
     setCoach(`Rep ${session.reps}: técnica correcta (${Math.round(rep.minElbow)}°)`, "good");
-    speak(String(spoken));
+    speak(String(spoken), true);
     buzz(40);
   } else {
     const [kind, msg] = issues[0];
     setCoach(msg, kind);
-    speak(`${spoken}. ${msg}`);
+    speak(`${spoken}. ${shortPhrase(msg)}`, true);
     buzz([30, 70, 30]);
   }
 
@@ -711,7 +711,7 @@ function pulseCount() {
 
 function endSet() {
   if (currentSet >= plan.sets) {
-    speak("Última serie completada. Buen trabajo");
+    speak("Última serie completada. Buen trabajo", true);
     setTimeout(stop, 1200);
     return;
   }
@@ -721,7 +721,7 @@ function endSet() {
   el.restNext.textContent = `${currentSet + 1}/${plan.sets}`;
   el.restOverlay.hidden = false;
   el.phase.textContent = "descanso";
-  speak(`Serie ${currentSet} completada. Descansa ${plan.rest} segundos`);
+  speak(`Serie ${currentSet} completada. Descansa ${plan.rest} segundos`, true);
   buzz([200, 100, 200]);
 }
 
@@ -736,7 +736,7 @@ function tickRest() {
   el.ringFg.style.strokeDashoffset = RING * (1 - msLeft / (plan.rest * 1000));
   if (restCue !== left && (left === 10 || left <= 3)) {
     restCue = left;
-    speak(left === 10 ? "Diez segundos" : String(left));
+    speak(left === 10 ? "Diez segundos" : String(left), true);
   }
 }
 
@@ -754,7 +754,7 @@ function startNextSet() {
   updateCounter();
   el.phase.textContent = "arriba";
   setCoach(`Serie ${currentSet}. ¡Vamos!`, "good");
-  speak(`Serie ${currentSet}. Vamos`);
+  speak(`Serie ${currentSet}. Vamos`, true);
   buzz(400);
 }
 
@@ -787,16 +787,59 @@ function buzz(pattern) {
   if (el.haptics.checked) navigator.vibrate?.(pattern);
 }
 
-let lastSpoken = 0;
-function speak(text) {
-  if (!el.voice.checked || !window.speechSynthesis) return;
-  if (performance.now() - lastSpoken < 700) return;
-  lastSpoken = performance.now();
-  window.speechSynthesis.cancel();
+const synth = window.speechSynthesis;
+let esVoice = null;
+
+function pickVoice() {
+  const voices = synth?.getVoices?.() || [];
+  esVoice = voices.find(v => /^es[-_]ES/i.test(v.lang))
+    || voices.find(v => /^es/i.test(v.lang))
+    || null;
+}
+synth?.addEventListener?.("voiceschanged", pickVoice);
+pickVoice();
+
+// El motor de voz del móvil solo arranca desde un gesto del usuario, y si no se
+// le habla en un rato se duerme. Se despierta al pulsar Empezar con una frase
+// muda; sin esto el primer aviso de la sesión se pierde.
+let speechWatchdog = 0;
+
+function primeSpeech() {
+  if (!synth) return;
+  try {
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    synth.speak(u);
+  } catch { /* navegador sin voz */ }
+
+  // Chrome deja de hablar tras un rato en segundo plano si nadie lo reanima
+  clearInterval(speechWatchdog);
+  speechWatchdog = setInterval(() => {
+    if (synth.speaking && !synth.paused) synth.resume();
+  }, 8000);
+}
+
+// `urgent` = el número de la repetición, que es lo que no puede perderse. Un
+// consejo no interrumpe a otro: cortar a media frase es justo lo que se oye
+// como "no ha sonado".
+function speak(text, urgent = false) {
+  if (!el.voice.checked || !synth) return;
+  if (synth.speaking || synth.pending) {
+    if (!urgent) return;
+    synth.cancel();
+  }
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "es-ES";
-  u.rate = 1.1;
-  window.speechSynthesis.speak(u);
+  if (esVoice) u.voice = esVoice;
+  u.rate = 1.05;
+  synth.speak(u);
+}
+
+// Frase corta para decir en voz: el detalle se lee en pantalla. Una frase larga
+// no cabe entre dos repeticiones y acaba pisada por la siguiente.
+function shortPhrase(msg) {
+  return msg.split(/[:.(]/)[0].trim();
 }
 
 // --- render ------------------------------------------------------------
@@ -904,6 +947,7 @@ document.addEventListener("visibilitychange", () => {
 // --- sesión ------------------------------------------------------------
 
 async function start() {
+  primeSpeech();   // aquí seguimos dentro del gesto del usuario; después ya no
   el.startBtn.disabled = true;
   el.startBtn.textContent = "Cargando…";
   try {
@@ -965,6 +1009,8 @@ function stop() {
   if (recorder) { try { recorder.stop(); } catch { /* ya parado */ } recorder = null; }
   canvasStream?.getTracks().forEach(t => t.stop());
   canvasStream = null;
+  clearInterval(speechWatchdog);
+  speechWatchdog = 0;
   stream?.getTracks().forEach(t => t.stop());
   stream = null;
   wakeLock?.release?.();
@@ -994,7 +1040,7 @@ function stop() {
       summary.push(["good", prev
         ? `¡Récord nuevo! ${session.reps} flexiones, ${session.reps - prev.reps} más que tu marca anterior.`
         : `Primera marca: ${session.reps} flexiones. A partir de aquí, a superarla.`]);
-      speak("Récord nuevo");
+      speak("Récord nuevo", true);
     } else if (session.reps === prev.reps) {
       summary.push(["good", `Igualas tu récord: ${prev.reps} flexiones.`]);
     } else {
@@ -1009,7 +1055,7 @@ function stop() {
   if (!summary.length) summary.push(["good", "Sin fallos repetidos. Buena sesión."]);
   showFeedback(summary);
   showScreen("summary");
-  speak(`Sesión terminada. ${session.reps} flexiones. Calidad ${avg} sobre 100.`);
+  speak(`Sesión terminada. ${session.reps} flexiones. Calidad ${avg} sobre 100.`, true);
 
   saveSession({
     date: Date.now(), reps: session.reps, quality: avg, duration,
